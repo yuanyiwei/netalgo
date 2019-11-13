@@ -546,7 +546,7 @@ void resolver_process(struct Message* msg)
     rr->class = q->qClass;
     rr->ttl = 60*60; // in seconds; 0 means no caching
 
-    printf("Query for '%s'\n", q->qName);
+    //printf("Query for '%s'\n", q->qName);
 
     // We only can only answer two question types so far
     // and the answer (resource records) will be all put
