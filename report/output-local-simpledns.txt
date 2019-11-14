@@ -1,0 +1,8 @@
+QUERY { ID: 315e. FIELDS: [ QR: 0, OpCode: 0 ], QDcount: 1, ANcount: 0, NScount: 0, ARcount: 1,
+  Question { qName 'foo.bar.com', qType 1, qClass 1 }
+}
+Query for 'foo.bar.com'
+QUERY { ID: 315e. FIELDS: [ QR: 1, OpCode: 0 ], QDcount: 1, ANcount: 1, NScount: 0, ARcount: 0,
+  Question { qName 'foo.bar.com', qType 1, qClass 1 }
+  ResourceRecord { name 'foo.bar.com', type 1, class 1, ttl 3600, rd_length 4, Address Resource Record { address 192.168.1.1 }}
+}

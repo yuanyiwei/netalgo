@@ -1,0 +1,27 @@
+[ldeng@localhost SimpleDNS]$ ./main
+Listening on port 9000.
+Count: 0
+Count: 1029
+Count: 2060
+Count: 3121
+Count: 4156
+Count: 5209
+Count: 5997
+Count: 6756
+Count: 7756
+Count: 8343
+Count: 9142
+
+[ldeng@localhost SimpleDNS]$ ./main
+Listening on port 9000.
+Count: 0
+Count: 1077
+Count: 1954
+Count: 3005
+Count: 4067
+Count: 5122
+Count: 6161
+Count: 6945
+Count: 7996
+Count: 8937
+Count: 10260

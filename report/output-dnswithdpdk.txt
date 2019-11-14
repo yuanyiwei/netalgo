@@ -1,0 +1,63 @@
+[ldeng@localhost lab3]$ sudo ./build/server-main
+EAL: Detected 32 lcore(s)
+EAL: Detected 2 NUMA nodes
+EAL: Multi-process socket /var/run/dpdk/rte/mp_socket
+EAL: No free hugepages reported in hugepages-1048576kB
+EAL: Probing VFIO support...
+EAL: PCI device 0000:12:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:12:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:13:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+EAL: PCI device 0000:13:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+Port 0 MAC: 90 e2 ba 89 53 84
+
+WARNING: Too many lcores enabled. Only 1 used.
+
+SimpleDNS (using DPDK) is running...
+Send: 0, Resolved: 0
+Send: 6556, Resolved: 6556
+Send: 13244, Resolved: 13244
+Send: 19932, Resolved: 19932
+Send: 26620, Resolved: 26620
+Send: 33340, Resolved: 33340
+Send: 40060, Resolved: 40060
+Send: 46780, Resolved: 46780
+Send: 53500, Resolved: 53500
+Send: 60156, Resolved: 60156
+Send: 66844, Resolved: 66844
+
+
+[ldeng@localhost lab3]$ sudo ./build/server-main
+EAL: Detected 32 lcore(s)
+EAL: Detected 2 NUMA nodes
+EAL: Multi-process socket /var/run/dpdk/rte/mp_socket
+EAL: No free hugepages reported in hugepages-1048576kB
+EAL: Probing VFIO support...
+EAL: PCI device 0000:12:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:12:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:13:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+EAL: PCI device 0000:13:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+Port 0 MAC: 90 e2 ba 89 53 84
+
+WARNING: Too many lcores enabled. Only 1 used.
+
+SimpleDNS (using DPDK) is running...
+Send: 0, Resolved: 0
+Send: 6492, Resolved: 6492
+Send: 13180, Resolved: 13180
+Send: 19804, Resolved: 19804
+Send: 26524, Resolved: 26524
+Send: 33244, Resolved: 33244
+Send: 39964, Resolved: 39964
+Send: 46684, Resolved: 46684
+Send: 46702, Resolved: 46702
+Send: 53308, Resolved: 53308
+Send: 60028, Resolved: 60028
+Send: 66748, Resolved: 66748

@@ -1,0 +1,19 @@
+ldeng@ldeng-virtual-machine:~$ dig @localhost -p 9000 foo.bar.com A
+
+; <<>> DiG 9.10.3-P4-Ubuntu <<>> @localhost -p 9000 foo.bar.com A
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 12638
+;; flags: qr; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0
+
+;; QUESTION SECTION:
+;foo.bar.com.                   IN      A
+
+;; ANSWER SECTION:
+foo.bar.com.            235929600 IN    A       192.168.1.1
+
+;; Query time: 0 msec
+;; SERVER: 127.0.0.1#9000(127.0.0.1)
+;; WHEN: Wed Nov 13 12:10:19 CST 2019
+;; MSG SIZE  rcvd: 56
