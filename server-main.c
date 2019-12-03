@@ -18,6 +18,7 @@
 #include <rte_ip.h>
 #include <rte_udp.h>
 
+#include <signal.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
@@ -54,6 +55,33 @@ static const struct rte_eth_conf port_conf_default = {
 		.max_rx_pkt_len = ETHER_MAX_LEN,
 	},
 };
+
+static volatile struct app_stats {
+	struct {
+		uint64_t rx_pkts;
+		uint64_t enqueued_pkts;
+		uint64_t enqdrop_pkts;
+	} rx __rte_cache_aligned;
+
+	struct {
+		uint64_t in_pkts;
+		uint64_t ret_pkts;
+		uint64_t sent_pkts;
+		uint64_t enqdrop_pkts;
+	} dist __rte_cache_aligned;
+
+	struct {
+		uint64_t dequeue_pkts;
+		uint64_t tx_pkts;
+		uint64_t enqdrop_pkts;
+	} tx __rte_cache_aligned;
+
+	struct {
+		uint64_t worker_pkts;
+		uint64_t ret_pkts;
+		uint64_t drop_pkts;
+	} worker[64] __rte_cache_aligned;
+} app_stats;
 
 /*
  * Initializes a given port using global settings and with the RX buffers
@@ -128,17 +156,6 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 }
 
 /*
- * Swap len bytes from addr1 and addr2.
- * Only for len <= 8.
- */
-inline void memswap(void *addr1, void *addr2, size_t len){
-	uint8_t tmp_buf[8];
-	memcpy(tmp_buf, addr1, len);
-	memcpy(addr1, addr2, len);
-	memcpy(addr2, tmp_buf, len);
-}
-
-/*
  * Receive packets and push into rx_queue.
  */
 static int
@@ -159,9 +176,11 @@ lcore_rx(__attribute__((unused)) void *arg)
 	
 	while(!quit_signal_rx){
 		const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
-		uint16_t sent = rte_ring_enqueue_burst(out_ring,
-					(void *)bufs, nb_rx, NULL);
+		app_stats.rx.rx_pkts += nb_rx;
+		uint16_t sent = rte_ring_enqueue_burst(out_ring, (void *)bufs, nb_rx, NULL);
+		app_stats.rx.enqueued_pkts += sent;
 		if (unlikely(sent < nb_rx)) {
+			app_stats.rx.enqdrop_pkts += nb_rx - sent;
 			RTE_LOG_DP(DEBUG, DISTRAPP,
 				"%s:Packet loss due to full ring\n", __func__);
 			while (sent < nb_rx){
@@ -188,23 +207,22 @@ lcore_distributor(__attribute__((unused)) void *arg)
 
 	printf("Core %"PRIu32": Doing packet ditributing.\n", rte_lcore_id());
 	while (!quit_signal_dist) {
-		const uint16_t nb_rx = rte_ring_dequeue_burst(in_r,
-				(void *)bufs, BURST_SIZE, NULL);
+		const uint16_t nb_rx = rte_ring_dequeue_burst(in_r, (void *)bufs, BURST_SIZE, NULL);
+		app_stats.dist.in_pkts += nb_rx;
 		if (nb_rx) {
 			/* Distribute the packets */
 			rte_distributor_process(d, bufs, nb_rx);
 			/* Handle Returns */
-			const uint16_t nb_ret =
-				rte_distributor_returned_pkts(d,
-					bufs, BURST_SIZE*2);
-
+			const uint16_t nb_ret = rte_distributor_returned_pkts(d, bufs, BURST_SIZE*2);
+			app_stats.dist.ret_pkts += nb_ret;
 			if (unlikely(nb_ret == 0)){
 				continue;
 			}
 
-			uint16_t sent = rte_ring_enqueue_burst(out_r,
-					(void *)bufs, nb_ret, NULL);
+			uint16_t sent = rte_ring_enqueue_burst(out_r, (void *)bufs, nb_ret, NULL);
+			app_stats.dist.sent_pkts += sent;
 			if (unlikely(sent < nb_ret)) {
+				app_stats.dist.enqdrop_pkts += nb_ret - sent;
 				RTE_LOG(DEBUG, DISTRAPP,
 					"%s:Packet loss due to full out ring\n",
 					__func__);
@@ -244,11 +262,14 @@ lcore_tx(__attribute__((unused)) void *arg)
 	while (!quit_signal) {
 		const uint16_t nb_rx = rte_ring_dequeue_burst(dist_tx_ring,
 				(void *)(bufs + mbuf_cnt), BURST_SIZE_TX, NULL);
+		app_stats.tx.dequeue_pkts += nb_rx;
 		mbuf_cnt += nb_rx;
 		/* if we get no traffic, flush anything we have */
-		if (unlikely(nb_rx == 0 || mbuf_cnt > BURST_SIZE_TX)) {
+		if (unlikely(nb_rx == 0) || mbuf_cnt > BURST_SIZE_TX) {
 			uint32_t nb_tx = rte_eth_tx_burst(port, 0, bufs, mbuf_cnt);
+			app_stats.tx.tx_pkts += nb_rx;
 			while(unlikely(nb_tx < mbuf_cnt)){
+				app_stats.tx.dequeue_pkts += mbuf_cnt - nb_tx;
 				rte_pktmbuf_free(bufs[nb_tx++]);
 			}
 			continue;
@@ -256,6 +277,17 @@ lcore_tx(__attribute__((unused)) void *arg)
 	}
 	printf("\nCore %"PRIu32": exiting tx task.\n", rte_lcore_id());
 	return 0;
+}
+
+/*
+ * Swap len bytes from addr1 and addr2.
+ * Only for len <= 8.
+ */
+inline void memswap(void *addr1, void *addr2, size_t len){
+	uint8_t tmp_buf[8];
+	memcpy(tmp_buf, addr1, len);
+	memcpy(addr1, addr2, len);
+	memcpy(addr2, tmp_buf, len);
 }
 
 /*
@@ -319,7 +351,9 @@ lcore_worker(const uint32_t *worker_id)
 
 	printf("Core %"PRIu32": Acting as worker core.\n", rte_lcore_id());
 	while (!quit_signal_work) {
+		app_stats.worker[id].ret_pkts += ret_num;
 		num = rte_distributor_get_pkt(d, id, buf, buf, ret_num);
+		app_stats.worker[id].worker_pkts += num;
 		ret_num = 0;
 		/* Do a little bit of work for each packet */
 		uint32_t i;
@@ -331,14 +365,17 @@ lcore_worker(const uint32_t *worker_id)
 			buffer = (uint8_t *)(udp_hdr + 1);
 			if(unlikely(eth_hdr->ether_type != htons(0x800))){
 				rte_pktmbuf_free(buf[i]);
+				app_stats.worker[id].drop_pkts ++;
 				continue;
 			}
 			if(unlikely(ip_hdr->next_proto_id != 0x11)){
 				rte_pktmbuf_free(buf[i]);
+				app_stats.worker[id].drop_pkts ++;
 				continue;
 			}
 			if(unlikely(udp_hdr->dst_port != htons(9000u))){
 				rte_pktmbuf_free(buf[i]);
+				app_stats.worker[id].drop_pkts ++;
 				continue;
 			}
 
@@ -357,6 +394,7 @@ lcore_worker(const uint32_t *worker_id)
 			/*********read input (begin)**********/
 			if (decode_msg(&msg, buffer, nbytes) != 0) {
 				rte_pktmbuf_free(buf[i]);
+				app_stats.worker[id].drop_pkts ++;
 				continue;
 			}
 #ifdef _DEBUG
@@ -375,6 +413,7 @@ lcore_worker(const uint32_t *worker_id)
 			uint8_t *p = buffer;
 			if (encode_msg(&msg, &p) != 0) {
 				rte_pktmbuf_free(buf[i]);
+				app_stats.worker[id].drop_pkts ++;
 				continue;
 			}
 			uint32_t buflen = p - buffer;
@@ -390,6 +429,40 @@ lcore_worker(const uint32_t *worker_id)
 	return 0;
 }
 
+static void
+int_handler(int sig_num)
+{
+	printf("Exiting on signal %d\n", sig_num);
+	/* set quit flag for rx thread to exit */
+	quit_signal_dist = 1;
+}
+
+/*
+ * Print status.
+ */
+static void
+print_stats(void){
+	printf("%10s%8s%8s%8s%8s\n", "Type", "RX", "TX", "DROP", "RET");
+	printf("%10s%8"PRIu64"%8"PRIu64"%8"PRIu64"%8s\n"
+			, "RX"
+			, app_stats.rx.rx_pkts
+			, app_stats.rx.enqueued_pkts
+			, app_stats.rx.enqdrop_pkts
+			, "-");
+	printf("%10s%8"PRIu64"%8"PRIu64"%8"PRIu64"%8"PRIu64"\n"
+			, "DIST"
+			, app_stats.dist.in_pkts
+			, app_stats.dist.sent_pkts
+			, app_stats.dist.enqdrop_pkts
+			, app_stats.dist.ret_pkts);
+	printf("%10s%8"PRIu64"%8"PRIu64"%8"PRIu64"%8s\n"
+			, "RX"
+			, app_stats.tx.dequeue_pkts
+			, app_stats.tx.tx_pkts
+			, app_stats.tx.enqdrop_pkts
+			, "-");
+}
+
 /*
  * The main function, which does initialization and calls the per-lcore
  * functions.
@@ -399,6 +472,9 @@ main(int argc, char *argv[])
 {
 	uint16_t portid = 0, nb_ports = 1;
 	uint32_t lcore_id, worker_id = 0, lcore_active = 0;
+
+	/* catch ctrl-c so we can print on exit */
+	signal(SIGINT, int_handler);
 
 	/* Initialize the Environment Abstraction Layer (EAL). */
 	int ret = rte_eal_init(argc, argv);
@@ -484,6 +560,6 @@ main(int argc, char *argv[])
 			return -1;
 		}
 	}
-
+	print_stats();
 	return 0;
 }
