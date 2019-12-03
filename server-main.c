@@ -25,6 +25,8 @@
 
 #include "SimpleDNS.h"
 
+#define _DEBUG
+
 #define RX_RING_SIZE 1024
 #define TX_RING_SIZE 1024
 
@@ -320,7 +322,8 @@ lcore_worker(const uint32_t *worker_id)
 		num = rte_distributor_get_pkt(d, id, buf, buf, ret_num);
 		ret_num = 0;
 		/* Do a little bit of work for each packet */
-		for (uint32_t i = 0; i < num; i++) {
+		uint32_t i;
+		for (i = 0; i < num; i++) {
 			uint8_t *data_addr = rte_pktmbuf_mtod(buf[i], uint8_t *);
 			eth_hdr = (struct ether_hdr *)data_addr;
 			ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
