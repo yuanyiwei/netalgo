@@ -15,7 +15,10 @@ do
         fi
         bind_devices_to_igb_uio ${arr[0]}
     else
-        unbind_devices ${arr[0]} ${arr[3]}
+        ifconfig | grep ${arr[1]} > /dev/null
+        if [ $? == 1 ]; then
+            unbind_devices ${arr[0]} ${arr[3]}
+        fi
     fi
 done < $eth_info
 echo "------------------------------------------------------------------------------"
