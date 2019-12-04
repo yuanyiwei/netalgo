@@ -27,6 +27,7 @@
 #include "SimpleDNS.h"
 
 #define _DEBUG
+//#define _DEBUG_PRINT_QUERY
 //#define _HOST
 
 #define RX_RING_SIZE 1024
@@ -38,7 +39,7 @@
 #define SCHED_TX_RING_SZ 65536
 #define BURST_SIZE 64
 #define BURST_SIZE_TX 32
-#define MAX_WORKER 2
+#define MAX_WORKER 4
 
 #define RTE_LOGTYPE_DISTRAPP RTE_LOGTYPE_USER1
 
@@ -55,7 +56,17 @@ volatile uint8_t quit_signal_work;
 
 static const struct rte_eth_conf port_conf_default = {
 	.rxmode = {
+		.mq_mode = ETH_MQ_RX_RSS,
 		.max_rx_pkt_len = ETHER_MAX_LEN,
+	},
+	.txmode = {
+		.mq_mode = ETH_MQ_TX_NONE,
+	},
+	.rx_adv_conf = {
+		.rss_conf = {
+			.rss_hf = ETH_RSS_IP | ETH_RSS_UDP |
+				ETH_RSS_TCP | ETH_RSS_SCTP,
+		}
 	},
 };
 
@@ -252,11 +263,6 @@ lcore_rx(__attribute__((unused)) void *arg)
 		app_stats.rx.rx_pkts += nb_rx;
 		uint16_t sent = rte_ring_enqueue_burst(out_ring, (void *)bufs, nb_rx, NULL);
 		app_stats.rx.enqueued_pkts += sent;
-#ifdef _DEBUG
-		if(nb_rx > 0){
-			print_stats();
-		}
-#endif
 		if (unlikely(sent < nb_rx)) {
 			app_stats.rx.enqdrop_pkts += nb_rx - sent;
 			RTE_LOG_DP(DEBUG, DISTRAPP,
@@ -289,9 +295,6 @@ lcore_distributor(__attribute__((unused)) void *arg)
 		const uint16_t nb_rx = rte_ring_dequeue_burst(in_r, (void *)bufs, BURST_SIZE, NULL);
 		app_stats.dist.in_pkts += nb_rx;
 		if (nb_rx) {
-#ifdef _DEBUG
-			//print_stats();
-#endif
 			/* Distribute the packets */
 			rte_distributor_process(d, bufs, nb_rx);
 			/* Handle Returns */
@@ -350,11 +353,12 @@ lcore_tx(__attribute__((unused)) void *arg)
 		/* if we get no traffic, flush anything we have */
 		if (unlikely(nb_rx == 0) || mbuf_cnt > BURST_SIZE_TX) {
 			uint32_t nb_tx = rte_eth_tx_burst(port, 0, bufs, mbuf_cnt);
-			app_stats.tx.tx_pkts += nb_rx;
+			app_stats.tx.tx_pkts += nb_tx;
 			app_stats.tx.enqdrop_pkts += mbuf_cnt - nb_tx;
 			while(unlikely(nb_tx < mbuf_cnt)){
 				rte_pktmbuf_free(bufs[nb_tx++]);
 			}
+			mbuf_cnt = 0;
 			continue;
 		}
 	}
@@ -438,16 +442,6 @@ lcore_worker(const uint32_t *worker_id)
 	memset(&msg, 0, sizeof(msg));
 
 	printf("Core %"PRIu32": Acting as worker core, id: %"PRIu32".\n", rte_lcore_id(), id);
-	while(!quit_signal_work) {
-		app_stats.worker[id].round ++;
-		app_stats.worker[id].ret_pkts += ret_num;
-		num = rte_distributor_get_pkt(d, id, buf, buf, ret_num);
-		app_stats.worker[id].worker_pkts += num;
-		ret_num = num;
-#ifdef _DEBUG
-		printf("Worker%"PRIu32": recv %"PRIu32"\n", id, num);
-#endif
-	}
 	while (!quit_signal_work) {
 		app_stats.worker[id].round ++;
 		app_stats.worker[id].ret_pkts += ret_num;
@@ -461,10 +455,6 @@ lcore_worker(const uint32_t *worker_id)
 		/* Do a little bit of work for each packet */
 		uint32_t i;
 		for (i = 0; i < num; i++) {
-#ifdef _DEBUG
-		printf("worker %"PRIu32": runing! checkpoint 2: %"PRIu32"\n", rte_lcore_id(), num);
-		fflush(stdout);
-#endif
 			uint8_t *data_addr = rte_pktmbuf_mtod(buf[i], uint8_t *);
 			eth_hdr = (struct ether_hdr *)data_addr;
 			ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
@@ -504,13 +494,13 @@ lcore_worker(const uint32_t *worker_id)
 				app_stats.worker[id].drop_pkts ++;
 				continue;
 			}
-#ifdef _DEBUG
+#ifdef _DEBUG_PRINT_QUERY
 			/* Print query */
 			print_query(&msg);
 #endif
 			resolver_process(&msg);
 
-#ifdef _DEBUG
+#ifdef _DEBUG_PRINT_QUERY
 			/* Print response */
 			print_query(&msg);
 #endif
@@ -533,7 +523,7 @@ lcore_worker(const uint32_t *worker_id)
 			buf[ret_num ++] = buf[i];
 		}
 #ifdef _DEBUG
-		printf("worker %"PRIu32": runing! checkpoint 3. signal: %d\n", id, quit_signal_work);
+		printf("worker %"PRIu32": runing! checkpoint 2. signal: %d\n", id, quit_signal_work);
 		fflush(stdout);
 #endif
 	}
