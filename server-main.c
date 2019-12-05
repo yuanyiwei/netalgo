@@ -43,6 +43,7 @@
 #define BURST_SIZE_WORKER 16
 #define BURST_SIZE_TX 32
 #define MAX_WORKER 4
+#define NUM_RX 2
 
 #define RTE_LOGTYPE_DISTRAPP RTE_LOGTYPE_USER1
 
@@ -56,10 +57,22 @@ volatile uint8_t quit_signal_rx;
 volatile uint8_t quit_signal_dist;
 volatile uint8_t quit_signal_work;
 
-static const struct rte_eth_conf port_conf_default = {
-	.rxmode = {
-		.max_rx_pkt_len = ETHER_MAX_LEN,
-	},
+static struct rte_eth_conf port_conf_default = {
+    .rxmode = {
+        .mq_mode = ETH_MQ_RX_RSS,
+        .max_rx_pkt_len = ETHER_MAX_LEN,
+        .split_hdr_size = 0,
+        .offloads = DEV_RX_OFFLOAD_CHECKSUM,
+    },
+    .rx_adv_conf = {
+        .rss_conf = {
+            .rss_key = NULL,
+            .rss_hf = ETH_RSS_UDP,
+        },
+    },
+    .txmode = {
+        .mq_mode = ETH_MQ_TX_NONE,
+    },
 };
 
 static volatile struct app_stats {
@@ -68,7 +81,7 @@ static volatile struct app_stats {
 		uint64_t enqueued_pkts;
 		uint64_t enqdrop_pkts;
 		uint64_t round;
-	} rx __rte_cache_aligned;
+	} rx[NUM_RX] __rte_cache_aligned;
 
 	struct {
 		uint64_t dequeue_pkts;
@@ -91,14 +104,17 @@ static volatile struct app_stats {
  */
 static void
 print_stats(void){
+	int i;
 	printf("%10s%14s%14s%14s%14s%14s\n", "Type", "RX", "TX", "DROP", "RET", "ROUND");
-	printf("%10s%14"PRIu64"%14"PRIu64"%14"PRIu64"%14s%14"PRIu64"\n"
-			, "RX"
-			, app_stats.rx.rx_pkts
-			, app_stats.rx.enqueued_pkts
-			, app_stats.rx.enqdrop_pkts
-			, "-"
-			, app_stats.rx.round);
+	for(i = 0; i < NUM_RX; i++){
+		printf("      %2s%2d%14"PRIu64"%14"PRIu64"%14"PRIu64"%14s%14"PRIu64"\n"
+				, "RX", i
+				, app_stats.rx[i].rx_pkts
+				, app_stats.rx[i].enqueued_pkts
+				, app_stats.rx[i].enqdrop_pkts
+				, "-"
+				, app_stats.rx[i].round);
+	}
 	printf("%10s%14"PRIu64"%14"PRIu64"%14"PRIu64"%14s%14"PRIu64"\n"
 			, "TX"
 			, app_stats.tx.dequeue_pkts
@@ -107,7 +123,6 @@ print_stats(void){
 			, "-"
 			, app_stats.tx.round);
 	
-	int i;
 	for(i = 0; i < num_worker; i++){
 		printf("  %6s%2d%14"PRIu64"%14"PRIu64"%14"PRIu64"%14"PRIu64"%14"PRIu64"\n"
 				, "Worker", i
@@ -130,7 +145,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 #ifdef _HOST
 	const uint16_t rxRings = 1, txRings = 1;
 #else
-	const uint16_t rxRings = 1, txRings = rte_lcore_count() - 1;
+	const uint16_t rxRings = NUM_RX, txRings = rte_lcore_count() - 1;
 #endif
 	int retval;
 	uint16_t q;
@@ -220,8 +235,9 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
  * Receive packets and push into rx_queue.
  */
 static int
-lcore_rx(__attribute__((unused)) void *arg)
+lcore_rx(uint32_t *rx_id)
 {
+	const uint32_t id = *rx_id;
 	const uint16_t port = 0;
 	struct rte_mbuf *bufs[BURST_SIZE];
 	struct rte_ring *out_ring = rx_worker_ring;
@@ -233,11 +249,11 @@ lcore_rx(__attribute__((unused)) void *arg)
 					"be optimal.\n", port);
 	}
 
-	printf("Core %"PRIu32": Doing packet RX.\n", rte_lcore_id());
+	printf("Core %"PRIu32": Doing packet RX, id: %"PRIu32"\n", rte_lcore_id(), id);
 	
 	while(!quit_signal_rx){
-		app_stats.rx.round ++;
-		const uint16_t nb_rx = rte_eth_rx_burst(port, 0, bufs, BURST_SIZE);
+		app_stats.rx[id].round ++;
+		const uint16_t nb_rx = rte_eth_rx_burst(port, id, bufs, BURST_SIZE);
 #ifdef _DEBUG
 		if(nb_rx > 0 && nb_rx < BURST_SIZE){
 			printf("RX recv: %"PRIu16", BURST_SIZE: %"PRIu32"\n", nb_rx, BURST_SIZE);
@@ -248,11 +264,11 @@ lcore_rx(__attribute__((unused)) void *arg)
 			printf("RX recv: %"PRIu16"!\n", nb_rx);
 		}
 #endif
-		app_stats.rx.rx_pkts += nb_rx;
+		app_stats.rx[id].rx_pkts += nb_rx;
 		uint16_t sent = rte_ring_enqueue_burst(out_ring, (void *)bufs, nb_rx, NULL);
-		app_stats.rx.enqueued_pkts += sent;
+		app_stats.rx[id].enqueued_pkts += sent;
 		if (unlikely(sent < nb_rx)) {
-			app_stats.rx.enqdrop_pkts += nb_rx - sent;
+			app_stats.rx[id].enqdrop_pkts += nb_rx - sent;
 			RTE_LOG_DP(DEBUG, DISTRAPP,
 				"%s:Packet loss due to full ring\n", __func__);
 			while (sent < nb_rx){
@@ -494,6 +510,7 @@ main(int argc, char *argv[])
 {
 	uint16_t portid = 0, nb_ports = 1;
 	uint32_t lcore_id, worker_id = 0, lcore_active = 0;
+	uint32_t rx_id = 0;
 
 	/* catch ctrl-c so we can print on exit */
 	signal(SIGINT, int_handler);
@@ -535,7 +552,7 @@ main(int argc, char *argv[])
 		rte_exit(EXIT_FAILURE, "Cannot create output ring\n");
 
 	rx_worker_ring = rte_ring_create("Input_ring", SCHED_RX_RING_SZ,
-			rte_socket_id(), RING_F_SP_ENQ);
+			rte_socket_id(), 0);
 	if (rx_worker_ring == NULL)
 		rte_exit(EXIT_FAILURE, "Cannot create output ring\n");
 
@@ -545,18 +562,19 @@ main(int argc, char *argv[])
 			rte_eal_remote_launch((lcore_function_t *)lcore_tx,
 					worker_tx_ring, lcore_id);
 		}
-		else if(lcore_active == 1){
+		else if(rx_id < 2){
+			uint32_t *id = rte_malloc(NULL, sizeof(*id), 0);
+			*id = rx_id++;
 			printf("Master: Launch lcore %"PRIu32": RX.\n", lcore_id);
 			rte_eal_remote_launch((lcore_function_t *)lcore_rx,
-					NULL, lcore_id);
+					id, lcore_id);
 		}
 		else{
 			uint32_t *id = rte_malloc(NULL, sizeof(*id), 0);
-			*id = worker_id;
+			*id = worker_id++;
 			printf("Master: Launch lcore %"PRIu32": Worker.\n", lcore_id);
 			rte_eal_remote_launch((lcore_function_t *)lcore_worker,
 					id, lcore_id);
-			worker_id ++;
 			num_worker = worker_id;
 		}
 		lcore_active ++;
