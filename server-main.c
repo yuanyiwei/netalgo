@@ -26,31 +26,41 @@
 
 #include "SimpleDNS.h"
 
-//#define _DEBUG
-//#define _DEBUG_PRINT_WK
+#define _DEBUG
+#ifdef _DEBUG
 //#define _DEBUG_PRINT_RX
+#define _DEBUG_PRINT_TX
+//#define _DEBUG_PRINT_WK
 //#define _DEBUG_PRINT_QUERY
 //#define _HOST
+#endif
 
 #define RX_RING_SIZE 1024
 #define TX_RING_SIZE 1024
 
-#define NUM_MBUFS 8191
+#define NUM_MBUFS ((64*1024)-1)
 #define MBUF_CACHE_SIZE 250
 #define SCHED_RX_RING_SZ 8192
 #define SCHED_TX_RING_SZ 65536
-#define BURST_SIZE 64
+#define BURST_SIZE 32
 #define BURST_SIZE_WORKER 16
 #define BURST_SIZE_TX 32
-#define MAX_WORKER 4
-#define NUM_RX 2
+#define MAX_WORKER 64
+#define MAX_RX 8
+#define MAX_TX 8
+#define DEFAULT_WORKER 16
+#define DEFAULT_RX 1
+#define DEFAULT_TX 1
 
 #define RTE_LOGTYPE_DISTRAPP RTE_LOGTYPE_USER1
 
 struct rte_mempool *mbuf_pool;
 struct rte_ring *worker_tx_ring;
 struct rte_ring *rx_worker_ring;
-int num_worker;
+uint32_t num_worker;
+uint32_t num_rx;
+uint32_t num_tx;
+uint32_t num_lcore;
 
 volatile uint8_t quit_signal;
 volatile uint8_t quit_signal_rx;
@@ -81,14 +91,14 @@ static volatile struct app_stats {
 		uint64_t enqueued_pkts;
 		uint64_t enqdrop_pkts;
 		uint64_t round;
-	} rx[NUM_RX] __rte_cache_aligned;
+	} rx[MAX_RX] __rte_cache_aligned;
 
 	struct {
 		uint64_t dequeue_pkts;
 		uint64_t tx_pkts;
 		uint64_t enqdrop_pkts;
 		uint64_t round;
-	} tx __rte_cache_aligned;
+	} tx[MAX_TX] __rte_cache_aligned;
 
 	struct {
 		uint64_t worker_pkts;
@@ -96,7 +106,7 @@ static volatile struct app_stats {
 		uint64_t sent_pkts;
 		uint64_t drop_pkts;
 		uint64_t round;
-	} worker[64] __rte_cache_aligned;
+	} worker[MAX_WORKER] __rte_cache_aligned;
 } app_stats;
 
 /*
@@ -104,9 +114,9 @@ static volatile struct app_stats {
  */
 static void
 print_stats(void){
-	int i;
+	uint32_t i;
 	printf("%10s%14s%14s%14s%14s%14s\n", "Type", "RX", "TX", "DROP", "RET", "ROUND");
-	for(i = 0; i < NUM_RX; i++){
+	for(i = 0; i < num_rx; i++){
 		printf("      %2s%2d%14"PRIu64"%14"PRIu64"%14"PRIu64"%14s%14"PRIu64"\n"
 				, "RX", i
 				, app_stats.rx[i].rx_pkts
@@ -115,14 +125,15 @@ print_stats(void){
 				, "-"
 				, app_stats.rx[i].round);
 	}
-	printf("%10s%14"PRIu64"%14"PRIu64"%14"PRIu64"%14s%14"PRIu64"\n"
-			, "TX"
-			, app_stats.tx.dequeue_pkts
-			, app_stats.tx.tx_pkts
-			, app_stats.tx.enqdrop_pkts
-			, "-"
-			, app_stats.tx.round);
-	
+	for(i = 0; i< num_tx; i++){
+		printf("%10s%14"PRIu64"%14"PRIu64"%14"PRIu64"%14s%14"PRIu64"\n"
+				, "TX"
+				, app_stats.tx[i].dequeue_pkts
+				, app_stats.tx[i].tx_pkts
+				, app_stats.tx[i].enqdrop_pkts
+				, "-"
+				, app_stats.tx[i].round);
+	}
 	for(i = 0; i < num_worker; i++){
 		printf("  %6s%2d%14"PRIu64"%14"PRIu64"%14"PRIu64"%14"PRIu64"%14"PRIu64"\n"
 				, "Worker", i
@@ -142,11 +153,7 @@ static inline int
 port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 {
 	struct rte_eth_conf port_conf = port_conf_default;
-#ifdef _HOST
-	const uint16_t rxRings = 1, txRings = 1;
-#else
-	const uint16_t rxRings = NUM_RX, txRings = rte_lcore_count() - 1;
-#endif
+	const uint16_t rxRings = num_rx, txRings = num_tx;
 	int retval;
 	uint16_t q;
 	uint16_t nb_rxd = RX_RING_SIZE;
@@ -254,12 +261,10 @@ lcore_rx(uint32_t *rx_id)
 	while(!quit_signal_rx){
 		app_stats.rx[id].round ++;
 		const uint16_t nb_rx = rte_eth_rx_burst(port, id, bufs, BURST_SIZE);
-#ifdef _DEBUG
+#ifdef _DEBUG_PRINT_RX
 		if(nb_rx > 0 && nb_rx < BURST_SIZE){
 			printf("RX recv: %"PRIu16", BURST_SIZE: %"PRIu32"\n", nb_rx, BURST_SIZE);
 		}
-#endif
-#ifdef _DEBUG_PRINT_RX
 		if(nb_rx > 0){
 			printf("RX recv: %"PRIu16"!\n", nb_rx);
 		}
@@ -286,9 +291,10 @@ lcore_rx(uint32_t *rx_id)
  * Send packets in tx_queue.
  */
 static int
-lcore_tx(__attribute__((unused)) void *arg)
+lcore_tx(uint32_t *tx_id)
 {
-	struct rte_mbuf *bufs[BURST_SIZE_TX * 2];
+	uint32_t id = *tx_id;
+	struct rte_mbuf *bufs[BURST_SIZE_TX * 2 - 1];
 	uint32_t mbuf_cnt = 0;
 	const uint16_t port = 0;
 
@@ -299,18 +305,26 @@ lcore_tx(__attribute__((unused)) void *arg)
 					"be optimal.\n", port);
 	}
 
-	printf("Core %"PRIu32" doing packet TX.\n", rte_lcore_id());
+	printf("Core %"PRIu32" doing packet TX, id: %"PRIu32".\n", rte_lcore_id(), id);
 	while (!quit_signal) {
-		app_stats.tx.round++;
+		app_stats.tx[id].round++;
 		const uint16_t nb_rx = rte_ring_dequeue_burst(worker_tx_ring,
 				(void *)(bufs + mbuf_cnt), BURST_SIZE_TX, NULL);
-		app_stats.tx.dequeue_pkts += nb_rx;
+		app_stats.tx[id].dequeue_pkts += nb_rx;
 		mbuf_cnt += nb_rx;
 		/* if we get no traffic, flush anything we have */
-		if (unlikely(nb_rx == 0) || mbuf_cnt > BURST_SIZE_TX) {
-			uint32_t nb_tx = rte_eth_tx_burst(port, 0, bufs, mbuf_cnt);
-			app_stats.tx.tx_pkts += nb_tx;
-			app_stats.tx.enqdrop_pkts += mbuf_cnt - nb_tx;
+		if (mbuf_cnt > 0) {
+			uint32_t nb_tx = rte_eth_tx_burst(port, id, bufs, mbuf_cnt);
+			app_stats.tx[id].tx_pkts += nb_tx;
+			app_stats.tx[id].enqdrop_pkts += mbuf_cnt - nb_tx;
+#ifdef _DEBUG_PRINT_TX
+			if(nb_tx < mbuf_cnt){
+				printf("Round: %"PRIu64". TX send OK: %"PRIu32", all: %"PRIu32".\n"
+						, app_stats.tx[id].round
+						, nb_tx
+						, mbuf_cnt);
+			}
+#endif
 			while(unlikely(nb_tx < mbuf_cnt)){
 				rte_pktmbuf_free(bufs[nb_tx++]);
 			}
@@ -501,6 +515,14 @@ int_handler(int sig_num)
 	exit(-1);
 }
 
+int parse_args(int argc, char *argv[]){
+	num_rx = DEFAULT_RX;
+	num_tx = DEFAULT_TX;
+	num_worker = DEFAULT_WORKER;
+	num_lcore = num_rx + num_tx + num_worker + 1;
+	return 0;
+}
+
 /*
  * The main function, which does initialization and calls the per-lcore
  * functions.
@@ -508,9 +530,12 @@ int_handler(int sig_num)
 int
 main(int argc, char *argv[])
 {
-	uint16_t portid = 0, nb_ports = 1;
-	uint32_t lcore_id, worker_id = 0, lcore_active = 0;
+	uint16_t portid = 0;
+	uint16_t nb_ports = 1;
+	uint32_t lcore_id = 0;
+	uint32_t worker_id = 0;
 	uint32_t rx_id = 0;
+	uint32_t tx_id = 0;
 
 	/* catch ctrl-c so we can print on exit */
 	signal(SIGINT, int_handler);
@@ -523,13 +548,18 @@ main(int argc, char *argv[])
 	argc -= ret;
 	argv += ret;
 
-	if (rte_lcore_count() < 4) {
-		rte_exit(EXIT_FAILURE, "Error, This application needs at "
-				"least 5 logical cores to run:\n"
-				"1 lcore for stats (can be core 0)\n"
-				"1 lcore for packet RX\n"
-				"1 lcore for packet TX\n"
-				"and at least 1 lcore for worker threads\n");
+	parse_args(argc, argv);
+	if(ret < 0){
+		rte_exit(EXIT_FAILURE, "Error with arguments parsing.\n");
+	}
+
+	if (rte_lcore_count() < num_lcore) {
+		printf("This application needs at least %"PRIu32" logical cores to run:\n", num_lcore);
+		printf("1 lcore for master (must be core 0)\n");
+		printf("%"PRIu32" lcore(s) for RX\n", num_rx);
+		printf("%"PRIu32" lcore(s) for TX\n", num_tx);
+		printf("%"PRIu32" lcore(s) for WORKER\n", num_worker);
+		rte_exit(EXIT_FAILURE, "Lack of lcores.");
 	}
 
 	/* Creates a new mempool in memory to hold the mbufs. */
@@ -546,40 +576,43 @@ main(int argc, char *argv[])
 	 * scheduler ring is read by the transmitter core, and written to
 	 * by scheduler core
 	 */
-	worker_tx_ring = rte_ring_create("Output_ring", SCHED_TX_RING_SZ,
-			rte_socket_id(), RING_F_SC_DEQ);
+	if(num_tx == 1){
+		worker_tx_ring = rte_ring_create("Output_ring", SCHED_TX_RING_SZ, rte_socket_id(), RING_F_SC_DEQ);
+	}
+	else{
+		worker_tx_ring = rte_ring_create("Output_ring", SCHED_TX_RING_SZ, rte_socket_id(), 0);
+	}
 	if (worker_tx_ring == NULL)
 		rte_exit(EXIT_FAILURE, "Cannot create output ring\n");
 
-	rx_worker_ring = rte_ring_create("Input_ring", SCHED_RX_RING_SZ,
-			rte_socket_id(), 0);
+	if(num_rx == 1){
+		rx_worker_ring = rte_ring_create("Input_ring", SCHED_RX_RING_SZ, rte_socket_id(), RING_F_SP_ENQ);
+	}
+	else{
+		rx_worker_ring = rte_ring_create("Input_ring", SCHED_RX_RING_SZ, rte_socket_id(), 0);
+	}
+	
 	if (rx_worker_ring == NULL)
 		rte_exit(EXIT_FAILURE, "Cannot create output ring\n");
 
 	RTE_LCORE_FOREACH_SLAVE(lcore_id){
-		if(lcore_active == 0){
+		if(tx_id < num_tx){
+			uint32_t *id = rte_malloc(NULL, sizeof(*id), 0);
+			*id = tx_id++;
 			printf("Master: Launch lcore %"PRIu32": TX.\n", lcore_id);
-			rte_eal_remote_launch((lcore_function_t *)lcore_tx,
-					worker_tx_ring, lcore_id);
+			rte_eal_remote_launch((lcore_function_t *)lcore_tx, id, lcore_id);
 		}
-		else if(rx_id < 2){
+		else if(rx_id < num_rx){
 			uint32_t *id = rte_malloc(NULL, sizeof(*id), 0);
 			*id = rx_id++;
 			printf("Master: Launch lcore %"PRIu32": RX.\n", lcore_id);
-			rte_eal_remote_launch((lcore_function_t *)lcore_rx,
-					id, lcore_id);
+			rte_eal_remote_launch((lcore_function_t *)lcore_rx, id, lcore_id);
 		}
-		else{
+		else if(worker_id < num_worker){
 			uint32_t *id = rte_malloc(NULL, sizeof(*id), 0);
 			*id = worker_id++;
 			printf("Master: Launch lcore %"PRIu32": Worker.\n", lcore_id);
-			rte_eal_remote_launch((lcore_function_t *)lcore_worker,
-					id, lcore_id);
-			num_worker = worker_id;
-		}
-		lcore_active ++;
-		if(num_worker == MAX_WORKER){
-			break;
+			rte_eal_remote_launch((lcore_function_t *)lcore_worker, id, lcore_id);
 		}
 	}
 
