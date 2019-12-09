@@ -1,0 +1,78 @@
+EAL: Probing VFIO support...
+EAL: PCI device 0000:12:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:12:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:13:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+EAL: PCI device 0000:13:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+Initializing port 0... done
+Port 0 modified RSS hash function based on hardware support,requested:0x3bffc configured:0x38d34
+Port 0 MAC: 90 e2 ba 89 22 d8
+Starting worker on worker_id 0, lcore_id 1
+Starting worker on worker_id 1, lcore_id 2
+
+Core 1 acting as worker core.
+
+Core 2 acting as worker core.
+Starting worker on worker_id 2, lcore_id 3
+
+Core 3 acting as worker core.
+Starting worker on worker_id 3, lcore_id 4
+
+Core 4 acting as worker core.
+Starting worker on worker_id 4, lcore_id 5
+
+Core 5 acting as worker core.
+Starting worker on worker_id 5, lcore_id 6
+
+Core 6 acting as worker core.
+Starting worker on worker_id 6, lcore_id 7
+
+Core 7 acting as worker core.
+Starting worker on worker_id 7, lcore_id 8
+
+Core 8 acting as worker core.
+Starting tx  on worker_id 8, lcore_id 9
+
+Core 9 doing packet TX.
+Starting distributor on lcore_id 10
+Starting rx on worker_id 10, lcore_id 11
+
+Core 10 acting as distributor core.
+
+Core 11 doing packet RX.
+Exiting on signal 2
+
+Core 10 exiting distributor task.
+
+Core 11 exiting rx task.
+
+Core 9 exiting tx task.
+
+
+RX Thread:
+Port 0 Pktsin : 100000
+ - Received:    100000
+ - Returned:    0
+ - Enqueued:    100000
+ - Dropped:     [31m0[0m
+Distributor thread:
+ - In:          100000
+ - Returned:    99944
+ - Sent:        99944
+ - Dropped      [31m0[0m
+TX thread:
+ - Dequeued:    99944
+Port 0 Pktsout: 99451
+ - Transmitted: 99944
+ - Dropped:     [31m493[0m
+Worker 00 Pkts:  0.01. Bursts(1-8): 106 10 17 67 36 14 112 1399 
+Worker 01 Pkts:  0.01. Bursts(1-8): 121 4 26 64 30 8 129 1368 
+Worker 02 Pkts:  0.01. Bursts(1-8): 137 9 33 83 32 10 107 1367 
+Worker 03 Pkts:  0.01. Bursts(1-8): 114 9 44 73 42 22 121 1325 
+Worker 04 Pkts:  0.01. Bursts(1-8): 124 9 34 78 43 12 112 1351 
+Worker 05 Pkts:  0.01. Bursts(1-8): 113 10 22 74 27 17 130 1358 
+Worker 06 Pkts:  0.01. Bursts(1-8): 128 9 38 67 28 10 105 1380 
+Worker 07 Pkts:  0.01. Bursts(1-8): 118 13 27 69 30 12 116 1374 

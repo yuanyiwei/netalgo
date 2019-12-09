@@ -26,7 +26,7 @@
 
 #include "SimpleDNS.h"
 
-#define _DEBUG
+//#define _DEBUG
 #ifdef _DEBUG
 //#define _DEBUG_PRINT_RX
 #define _DEBUG_PRINT_TX
@@ -38,8 +38,8 @@
 #define RX_RING_SIZE 1024
 #define TX_RING_SIZE 1024
 
-#define NUM_MBUFS ((64*1024)-1)
-#define MBUF_CACHE_SIZE 250
+#define NUM_MBUFS 128*1024
+#define MBUF_CACHE_SIZE 128
 #define SCHED_RX_RING_SZ 8192
 #define SCHED_TX_RING_SZ 65536
 #define BURST_SIZE 32
@@ -51,6 +51,8 @@
 #define DEFAULT_WORKER 16
 #define DEFAULT_RX 1
 #define DEFAULT_TX 1
+#define PAUSE_TIME 100	//us
+#define PAUSE_CLOCK (PAUSE_TIME)*(rte_get_timer_hz()/1000000)
 
 #define RTE_LOGTYPE_DISTRAPP RTE_LOGTYPE_USER1
 
@@ -294,10 +296,10 @@ static int
 lcore_tx(uint32_t *tx_id)
 {
 	uint32_t id = *tx_id;
-	struct rte_mbuf *bufs[BURST_SIZE_TX * 2 - 1];
+	struct rte_mbuf *bufs[BURST_SIZE_TX];
 	uint32_t mbuf_cnt = 0;
 	const uint16_t port = 0;
-
+	uint8_t flag = 0;
 	if (rte_eth_dev_socket_id(port) > 0 &&
 			(uint32_t)rte_eth_dev_socket_id(port) != rte_socket_id()){
 		printf("WARNING, port %"PRIu16" is on remote NUMA node to "
@@ -308,10 +310,12 @@ lcore_tx(uint32_t *tx_id)
 	printf("Core %"PRIu32" doing packet TX, id: %"PRIu32".\n", rte_lcore_id(), id);
 	while (!quit_signal) {
 		app_stats.tx[id].round++;
-		const uint16_t nb_rx = rte_ring_dequeue_burst(worker_tx_ring,
-				(void *)(bufs + mbuf_cnt), BURST_SIZE_TX, NULL);
-		app_stats.tx[id].dequeue_pkts += nb_rx;
-		mbuf_cnt += nb_rx;
+		if(likely(!flag)){
+			const uint16_t nb_rx = rte_ring_dequeue_burst(worker_tx_ring,
+					(void *)(bufs + mbuf_cnt), BURST_SIZE_TX, NULL);
+			app_stats.tx[id].dequeue_pkts += nb_rx;
+			mbuf_cnt += nb_rx;
+		}
 		/* if we get no traffic, flush anything we have */
 		if (mbuf_cnt > 0) {
 			uint32_t nb_tx = rte_eth_tx_burst(port, id, bufs, mbuf_cnt);
@@ -325,11 +329,25 @@ lcore_tx(uint32_t *tx_id)
 						, mbuf_cnt);
 			}
 #endif
-			while(unlikely(nb_tx < mbuf_cnt)){
-				rte_pktmbuf_free(bufs[nb_tx++]);
+			if(nb_tx < mbuf_cnt){
+				uint64_t t = rte_rdtsc() + PAUSE_CLOCK;
+				flag = 1;
+				if(nb_tx > 0){
+					uint32_t idx = 0;
+					while(nb_tx < mbuf_cnt){
+						bufs[idx++] = bufs[nb_tx++];
+					}
+					mbuf_cnt = idx;
+				}
+
+				while(rte_rdtsc() < t){
+					rte_pause();
+				}
 			}
-			mbuf_cnt = 0;
-			continue;
+			else{
+				mbuf_cnt = 0;
+				flag = 0;
+			}
 		}
 	}
 	printf("\nCore %"PRIu32": exiting tx task.\n", rte_lcore_id());

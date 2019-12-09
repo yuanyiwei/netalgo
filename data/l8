@@ -1,0 +1,62 @@
+EAL: Probing VFIO support...
+EAL: PCI device 0000:12:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:12:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:13:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+EAL: PCI device 0000:13:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+Initializing port 0... done
+Port 0 modified RSS hash function based on hardware support,requested:0x3bffc configured:0x38d34
+Port 0 MAC: 90 e2 ba 89 22 d8
+Starting worker on worker_id 0, lcore_id 1
+Starting worker on worker_id 1, lcore_id 2
+
+Core 1 acting as worker core.
+
+Core 2 acting as worker core.
+Starting worker on worker_id 2, lcore_id 3
+
+Core 3 acting as worker core.
+Starting worker on worker_id 3, lcore_id 4
+
+Core 4 acting as worker core.
+Starting tx  on worker_id 4, lcore_id 5
+
+Core 5 doing packet TX.
+Starting distributor on lcore_id 6
+Starting rx on worker_id 6, lcore_id 7
+
+Core 6 acting as distributor core.
+
+Core 7 doing packet RX.
+Exiting on signal 2
+
+Core 6 exiting distributor task.
+
+Core 7 exiting rx task.
+
+Core 5 exiting tx task.
+
+
+RX Thread:
+Port 0 Pktsin : 100000
+ - Received:    100000
+ - Returned:    0
+ - Enqueued:    100000
+ - Dropped:     [31m0[0m
+Distributor thread:
+ - In:          100000
+ - Returned:    99971
+ - Sent:        99971
+ - Dropped      [31m0[0m
+TX thread:
+ - Dequeued:    99971
+Port 0 Pktsout: 99971
+ - Transmitted: 99971
+ - Dropped:     [31m0[0m
+Worker 00 Pkts:  0.02. Bursts(1-8): 306 41 263 748 252 54 291 2141 
+Worker 01 Pkts:  0.03. Bursts(1-8): 308 47 248 733 241 54 283 2191 
+Worker 02 Pkts:  0.02. Bursts(1-8): 332 38 273 728 250 37 304 2147 
+Worker 03 Pkts:  0.03. Bursts(1-8): 319 44 278 722 258 40 240 2214 

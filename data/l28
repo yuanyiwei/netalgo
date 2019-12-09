@@ -1,0 +1,142 @@
+EAL: Probing VFIO support...
+EAL: PCI device 0000:12:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:12:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:13:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+EAL: PCI device 0000:13:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+Initializing port 0... done
+Port 0 modified RSS hash function based on hardware support,requested:0x3bffc configured:0x38d34
+Port 0 MAC: 90 e2 ba 89 22 d8
+Starting worker on worker_id 0, lcore_id 1
+Starting worker on worker_id 1, lcore_id 2
+
+Core 1 acting as worker core.
+
+Core 2 acting as worker core.
+Starting worker on worker_id 2, lcore_id 3
+
+Core 3 acting as worker core.
+Starting worker on worker_id 3, lcore_id 4
+
+Core 4 acting as worker core.
+Starting worker on worker_id 4, lcore_id 5
+
+Core 5 acting as worker core.
+Starting worker on worker_id 5, lcore_id 6
+
+Core 6 acting as worker core.
+Starting worker on worker_id 6, lcore_id 7
+
+Core 7 acting as worker core.
+Starting worker on worker_id 7, lcore_id 8
+
+Core 8 acting as worker core.
+Starting worker on worker_id 8, lcore_id 9
+
+Core 9 acting as worker core.
+Starting worker on worker_id 9, lcore_id 10
+
+Core 10 acting as worker core.
+Starting worker on worker_id 10, lcore_id 11
+
+Core 11 acting as worker core.
+Starting worker on worker_id 11, lcore_id 12
+
+Core 12 acting as worker core.
+Starting worker on worker_id 12, lcore_id 13
+
+Core 13 acting as worker core.
+Starting worker on worker_id 13, lcore_id 14
+
+Core 14 acting as worker core.
+Starting worker on worker_id 14, lcore_id 15
+
+Core 15 acting as worker core.
+Starting worker on worker_id 15, lcore_id 16
+
+Core 16 acting as worker core.
+Starting worker on worker_id 16, lcore_id 17
+
+Core 17 acting as worker core.
+Starting worker on worker_id 17, lcore_id 18
+
+Core 18 acting as worker core.
+Starting worker on worker_id 18, lcore_id 19
+
+Core 19 acting as worker core.
+Starting worker on worker_id 19, lcore_id 20
+
+Core 20 acting as worker core.
+Starting worker on worker_id 20, lcore_id 21
+
+Core 21 acting as worker core.
+Starting worker on worker_id 21, lcore_id 22
+
+Core 22 acting as worker core.
+Starting worker on worker_id 22, lcore_id 23
+
+Core 23 acting as worker core.
+Starting worker on worker_id 23, lcore_id 24
+
+Core 24 acting as worker core.
+Starting tx  on worker_id 24, lcore_id 25
+
+Core 25 doing packet TX.
+Starting distributor on lcore_id 26
+Starting rx on worker_id 26, lcore_id 27
+
+Core 26 acting as distributor core.
+
+Core 27 doing packet RX.
+Exiting on signal 2
+
+Core 26 exiting distributor task.
+
+Core 27 exiting rx task.
+
+Core 25 exiting tx task.
+
+
+RX Thread:
+Port 0 Pktsin : 100000
+ - Received:    100000
+ - Returned:    0
+ - Enqueued:    60038
+ - Dropped:     [31m39962[0m
+Distributor thread:
+ - In:          60038
+ - Returned:    59923
+ - Sent:        59923
+ - Dropped      [31m0[0m
+TX thread:
+ - Dequeued:    59923
+Port 0 Pktsout: 59923
+ - Transmitted: 59923
+ - Dropped:     [31m0[0m
+Worker 00 Pkts:  0.00. Bursts(1-8): 59 1 1 0 0 2 38 273 
+Worker 01 Pkts:  0.00. Bursts(1-8): 57 3 0 1 0 3 53 256 
+Worker 02 Pkts:  0.00. Bursts(1-8): 57 2 0 0 0 6 42 265 
+Worker 03 Pkts:  0.00. Bursts(1-8): 45 0 0 0 0 5 53 255 
+Worker 04 Pkts:  0.00. Bursts(1-8): 58 5 0 0 1 9 36 267 
+Worker 05 Pkts:  0.00. Bursts(1-8): 42 2 0 0 0 4 54 255 
+Worker 06 Pkts:  0.00. Bursts(1-8): 57 3 0 0 0 5 49 259 
+Worker 07 Pkts:  0.00. Bursts(1-8): 53 4 0 0 0 5 50 258 
+Worker 08 Pkts:  0.00. Bursts(1-8): 58 1 0 0 0 3 61 249 
+Worker 09 Pkts:  0.00. Bursts(1-8): 53 2 0 0 0 7 42 264 
+Worker 10 Pkts:  0.00. Bursts(1-8): 54 0 0 0 0 7 47 259 
+Worker 11 Pkts:  0.00. Bursts(1-8): 56 1 0 0 0 2 34 277 
+Worker 12 Pkts:  0.00. Bursts(1-8): 49 1 0 0 0 1 42 270 
+Worker 13 Pkts:  0.00. Bursts(1-8): 38 2 0 0 0 2 51 260 
+Worker 14 Pkts:  0.00. Bursts(1-8): 56 3 0 0 0 4 52 257 
+Worker 15 Pkts:  0.00. Bursts(1-8): 51 3 0 0 0 1 52 260 
+Worker 16 Pkts:  0.00. Bursts(1-8): 46 1 0 0 0 4 72 237 
+Worker 17 Pkts:  0.00. Bursts(1-8): 53 2 1 0 0 2 50 260 
+Worker 18 Pkts:  0.00. Bursts(1-8): 57 1 0 0 0 9 41 262 
+Worker 19 Pkts:  0.00. Bursts(1-8): 53 2 0 0 0 1 46 265 
+Worker 20 Pkts:  0.00. Bursts(1-8): 47 3 0 0 0 3 52 257 
+Worker 21 Pkts:  0.00. Bursts(1-8): 48 3 0 0 0 3 50 259 
+Worker 22 Pkts:  0.00. Bursts(1-8): 43 3 0 0 0 3 54 255 
+Worker 23 Pkts:  0.00. Bursts(1-8): 63 2 0 0 0 2 47 263 

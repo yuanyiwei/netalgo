@@ -1,0 +1,94 @@
+EAL: Probing VFIO support...
+EAL: PCI device 0000:12:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:12:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:1572 net_i40e
+EAL: PCI device 0000:13:00.0 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+EAL: PCI device 0000:13:00.1 on NUMA socket 0
+EAL:   probe driver: 8086:10fb net_ixgbe
+Initializing port 0... done
+Port 0 modified RSS hash function based on hardware support,requested:0x3bffc configured:0x38d34
+Port 0 MAC: 90 e2 ba 89 22 d8
+Starting worker on worker_id 0, lcore_id 1
+Starting worker on worker_id 1, lcore_id 2
+
+Core 1 acting as worker core.
+
+Core 2 acting as worker core.
+Starting worker on worker_id 2, lcore_id 3
+
+Core 3 acting as worker core.
+Starting worker on worker_id 3, lcore_id 4
+
+Core 4 acting as worker core.
+Starting worker on worker_id 4, lcore_id 5
+
+Core 5 acting as worker core.
+Starting worker on worker_id 5, lcore_id 6
+
+Core 6 acting as worker core.
+Starting worker on worker_id 6, lcore_id 7
+
+Core 7 acting as worker core.
+Starting worker on worker_id 7, lcore_id 8
+
+Core 8 acting as worker core.
+Starting worker on worker_id 8, lcore_id 9
+
+Core 9 acting as worker core.
+Starting worker on worker_id 9, lcore_id 10
+
+Core 10 acting as worker core.
+Starting worker on worker_id 10, lcore_id 11
+
+Core 11 acting as worker core.
+Starting worker on worker_id 11, lcore_id 12
+
+Core 12 acting as worker core.
+Starting tx  on worker_id 12, lcore_id 13
+
+Core 13 doing packet TX.
+Starting distributor on lcore_id 14
+Starting rx on worker_id 14, lcore_id 15
+
+Core 14 acting as distributor core.
+
+Core 15 doing packet RX.
+Exiting on signal 2
+
+Core 14 exiting distributor task.
+
+Core 15 exiting rx task.
+
+Core 13 exiting tx task.
+
+
+RX Thread:
+Port 0 Pktsin : 100000
+ - Received:    100000
+ - Returned:    0
+ - Enqueued:    100000
+ - Dropped:     [31m0[0m
+Distributor thread:
+ - In:          100000
+ - Returned:    99923
+ - Sent:        99923
+ - Dropped      [31m0[0m
+TX thread:
+ - Dequeued:    99923
+Port 0 Pktsout: 99023
+ - Transmitted: 99923
+ - Dropped:     [31m900[0m
+Worker 00 Pkts:  0.01. Bursts(1-8): 101 6 2 5 5 10 99 929 
+Worker 01 Pkts:  0.01. Bursts(1-8): 105 4 2 5 2 7 90 944 
+Worker 02 Pkts:  0.01. Bursts(1-8): 96 5 2 2 2 7 92 941 
+Worker 03 Pkts:  0.01. Bursts(1-8): 91 4 2 8 2 7 96 932 
+Worker 04 Pkts:  0.01. Bursts(1-8): 99 6 2 1 4 8 99 933 
+Worker 05 Pkts:  0.01. Bursts(1-8): 87 4 5 4 4 6 99 925 
+Worker 06 Pkts:  0.01. Bursts(1-8): 76 2 2 4 2 6 104 930 
+Worker 07 Pkts:  0.01. Bursts(1-8): 115 5 4 3 2 13 91 931 
+Worker 08 Pkts:  0.01. Bursts(1-8): 104 3 2 3 4 6 89 940 
+Worker 09 Pkts:  0.01. Bursts(1-8): 91 4 1 10 2 12 94 929 
+Worker 10 Pkts:  0.01. Bursts(1-8): 133 3 2 5 1 11 96 932 
+Worker 11 Pkts:  0.01. Bursts(1-8): 100 2 1 6 1 6 91 943 
