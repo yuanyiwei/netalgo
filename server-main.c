@@ -26,12 +26,13 @@
 
 #include "SimpleDNS.h"
 
-//#define _DEBUG
+
+#define _DEBUG
 #ifdef _DEBUG
-//#define _DEBUG_PRINT_RX
+#define _DEBUG_PRINT_RX
 #define _DEBUG_PRINT_TX
 //#define _DEBUG_PRINT_WK
-//#define _DEBUG_PRINT_QUERY
+#define _DEBUG_PRINT_QUERY
 //#define _HOST
 #endif
 
@@ -44,15 +45,19 @@
 #define SCHED_TX_RING_SZ 65536
 #define BURST_SIZE 32
 #define BURST_SIZE_WORKER 16
-#define BURST_SIZE_TX 32
+#define BURST_SIZE_TX 64
 #define MAX_WORKER 64
 #define MAX_RX 8
 #define MAX_TX 8
-#define DEFAULT_WORKER 16
+#define DEFAULT_WORKER 1
 #define DEFAULT_RX 1
 #define DEFAULT_TX 1
-#define PAUSE_TIME 100	//us
-#define PAUSE_CLOCK (PAUSE_TIME)*(rte_get_timer_hz()/1000000)
+#define PAUSE_TIME_US 100	//us
+#define PAUSE_CLOCK (PAUSE_TIME_US)*(rte_get_timer_hz()/1000000)
+#define LOG_STATS_TIME_MS 10	//ms
+#define NUM_LOG_RECORDS 100
+#define SAVE_STATS_TIME_MS (LOG_STATS_TIME_MS * NUM_LOG_RECORDS)
+
 
 #define RTE_LOGTYPE_DISTRAPP RTE_LOGTYPE_USER1
 
@@ -110,6 +115,8 @@ static volatile struct app_stats {
 		uint64_t round;
 	} worker[MAX_WORKER] __rte_cache_aligned;
 } app_stats;
+
+struct app_stats stat_logs[NUM_LOG_RECORDS];
 
 /*
  * Print status.
@@ -358,7 +365,7 @@ lcore_tx(uint32_t *tx_id)
  * Swap len bytes from addr1 and addr2.
  * Only for len <= 8.
  */
-inline void memswap(void *addr1, void *addr2, size_t len){
+inline static void memswap(void *addr1, void *addr2, size_t len){
 	uint8_t tmp_buf[8];
 	memcpy(tmp_buf, addr1, len);
 	memcpy(addr1, addr2, len);
@@ -444,23 +451,7 @@ lcore_worker(const uint32_t *worker_id)
 			ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
 			udp_hdr = (struct udp_hdr *)(ip_hdr + 1);
 			buffer = (uint8_t *)(udp_hdr + 1);
-			if(unlikely(eth_hdr->ether_type != htons(0x800))){
-				rte_pktmbuf_free(buf[i]);
-				app_stats.worker[id].drop_pkts ++;
-				continue;
-			}
-			if(unlikely(ip_hdr->next_proto_id != 0x11)){
-				rte_pktmbuf_free(buf[i]);
-				app_stats.worker[id].drop_pkts ++;
-				continue;
-			}
-			if(unlikely(udp_hdr->dst_port != htons(9000u))){
-				rte_pktmbuf_free(buf[i]);
-				app_stats.worker[id].drop_pkts ++;
-				continue;
-			}
 
-			//Only allow UDP packet to port 9000
 			int hdr_len = (int)(buffer - data_addr);
 			int nbytes = buf[i]->data_len - hdr_len;
 			
@@ -533,7 +524,7 @@ int_handler(int sig_num)
 	exit(-1);
 }
 
-int parse_args(int argc, char *argv[]){
+static int parse_args(int argc, char *argv[]){
 	num_rx = DEFAULT_RX;
 	num_tx = DEFAULT_TX;
 	num_worker = DEFAULT_WORKER;
@@ -577,7 +568,7 @@ main(int argc, char *argv[])
 		printf("%"PRIu32" lcore(s) for RX\n", num_rx);
 		printf("%"PRIu32" lcore(s) for TX\n", num_tx);
 		printf("%"PRIu32" lcore(s) for WORKER\n", num_worker);
-		rte_exit(EXIT_FAILURE, "Lack of lcores.");
+		rte_exit(EXIT_FAILURE, "Lack of lcores.\n");
 	}
 
 	/* Creates a new mempool in memory to hold the mbufs. */

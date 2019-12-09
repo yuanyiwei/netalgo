@@ -175,6 +175,27 @@ struct Message {
   struct ResourceRecord* additionals;
 };
 
+int get_A_Record(uint8_t addr[4], const char domain_name[]);
+int get_AAAA_Record(uint8_t addr[16], const char domain_name[]);
+void print_hex(uint8_t* buf, size_t len);
+void print_resource_record(struct ResourceRecord* rr);
+void print_query(struct Message* msg);
+size_t get16bits(const uint8_t** buffer);
+void put8bits(uint8_t** buffer, uint8_t value);
+void put16bits(uint8_t** buffer, uint16_t value);
+void put32bits(uint8_t** buffer, uint32_t value);
+char* decode_domain_name(const uint8_t** buffer);
+void encode_domain_name(uint8_t** buffer, const char* domain);
+void decode_header(struct Message* msg, const uint8_t** buffer);
+void encode_header(struct Message* msg, uint8_t** buffer);
+int decode_msg(struct Message* msg, const uint8_t* buffer, int size);
+void resolver_process(struct Message* msg);
+void resolver_process(struct Message* msg);
+int encode_resource_records(struct ResourceRecord* rr, uint8_t** buffer);
+int encode_msg(struct Message* msg, uint8_t** buffer);
+void free_resource_records(struct ResourceRecord* rr);
+void free_questions(struct Question* qq);
+
 int get_A_Record(uint8_t addr[4], const char domain_name[])
 {
   if (strcmp("foo.bar.com", domain_name) == 0)
@@ -226,7 +247,7 @@ int get_AAAA_Record(uint8_t addr[16], const char domain_name[])
 
 void print_hex(uint8_t* buf, size_t len)
 {
-  int i;
+  unsigned i;
   printf("%zu bytes:\n", len);
   for(i = 0; i < len; ++i)
     printf("%02x ", buf[i]);
@@ -378,6 +399,7 @@ void put32bits(uint8_t** buffer, uint32_t value)
 */
 
 // 3foo3bar3com0 => foo.bar.com
+
 char* decode_domain_name(const uint8_t** buffer)
 {
   char name[256];
@@ -412,6 +434,7 @@ char* decode_domain_name(const uint8_t** buffer)
 }
 
 // foo.bar.com => 3foo3bar3com0
+
 void encode_domain_name(uint8_t** buffer, const char* domain)
 {
   uint8_t* buf = *buffer;
@@ -483,12 +506,18 @@ void encode_header(struct Message* msg, uint8_t** buffer)
 
 int decode_msg(struct Message* msg, const uint8_t* buffer, int size)
 {
-  int i;
+  unsigned i;
+  const uint8_t *buf_st = buffer;
 
   decode_header(msg, &buffer);
 
   if (msg->anCount != 0 || msg->nsCount != 0)
   {
+    printf("Only questions expected!\n");
+    return -1;
+  }
+
+  if(size < buffer - buf_st){
     printf("Only questions expected!\n");
     return -1;
   }
@@ -507,6 +536,10 @@ int decode_msg(struct Message* msg, const uint8_t* buffer, int size)
     // prepend question to questions list
     q->next = qs;
     msg->questions = q;
+    if(size < buffer - buf_st){
+      printf("Only questions expected!\n");
+      return -1;
+    }
   }
 
   // We do not expect any resource records to parse here.
