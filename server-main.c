@@ -27,12 +27,12 @@
 #include "SimpleDNS.h"
 
 
-#define _DEBUG
+//#define _DEBUG
 #ifdef _DEBUG
-#define _DEBUG_PRINT_RX
-#define _DEBUG_PRINT_TX
+//#define _DEBUG_PRINT_RX
+//#define _DEBUG_PRINT_TX
 //#define _DEBUG_PRINT_WK
-#define _DEBUG_PRINT_QUERY
+//#define _DEBUG_PRINT_QUERY
 //#define _HOST
 #endif
 
@@ -49,15 +49,11 @@
 #define MAX_WORKER 64
 #define MAX_RX 8
 #define MAX_TX 8
-#define DEFAULT_WORKER 1
+#define DEFAULT_WORKER 16
 #define DEFAULT_RX 1
 #define DEFAULT_TX 1
 #define PAUSE_TIME_US 100	//us
 #define PAUSE_CLOCK (PAUSE_TIME_US)*(rte_get_timer_hz()/1000000)
-#define LOG_STATS_TIME_MS 10	//ms
-#define NUM_LOG_RECORDS 100
-#define SAVE_STATS_TIME_MS (LOG_STATS_TIME_MS * NUM_LOG_RECORDS)
-
 
 #define RTE_LOGTYPE_DISTRAPP RTE_LOGTYPE_USER1
 
@@ -115,8 +111,6 @@ static volatile struct app_stats {
 		uint64_t round;
 	} worker[MAX_WORKER] __rte_cache_aligned;
 } app_stats;
-
-struct app_stats stat_logs[NUM_LOG_RECORDS];
 
 /*
  * Print status.
