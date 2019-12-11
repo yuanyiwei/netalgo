@@ -1,13 +1,24 @@
-# USTC 网络算法学 实验3
+# SimpleDNS with DPDK
 
-我完成的2019年中国科学技术大学网络算法学课程实验3代码。
+使用DPDK以及[SimpleDNS](https://github.com/mwarning/SimpleDNS)实现了一个示例DNS服务。
 
-使用DPDK和[SimpleDNS](https://github.com/mwarning/SimpleDNS)实现了DNS服务。
+本项目是作者在2019年中国科大网络算法学课程中完成的实验内容。
 
-具体信息请查看[reports](reports/)目录。
+关于具体的实验要求，请查看[scripts](scripts/)目录下文件。
 
-## 结构
+本项目的实现细节请查看[reports](reports/)目录下文件。
 
-[scripts](scripts/) 目录存放本实验的相关要求。
+## Usage
 
-[reports](reports/)目录存放实验报告。
+编译
+
+```bash
+make
+```
+
+运行
+
+```bash
+sudo ./build/server-main
+```
+
