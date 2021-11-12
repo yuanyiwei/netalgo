@@ -108,13 +108,56 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
     return 0;
 }
 
+inline void memswap(void *addr1, void *addr2, size_t len)
+{
+    uint8_t tmp_buf[8];
+    memcpy(tmp_buf, addr1, len);
+    memcpy(addr1, addr2, len);
+    memcpy(addr2, tmp_buf, len);
+}
+
 /*
  * In this function we complete the headers of a answer packet(buf1), 
  * basing on information from the query packet(buf2).
  */
 static void
-build_packet(char *buf1, char *buf2, uint16_t pkt_size)
+// build_packet(char *buf1, char *buf2, uint16_t pkt_size)
+build_packet(uint8_t *buf, uint16_t pkt_size)
 {
+    // Add your code here.
+
+    struct ether_hdr *eth_hdr = (struct ether_hdr *)buf;
+    struct ipv4_hdr *ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
+    struct udp_hdr *udp_hdr = (struct udp_hdr *)(ip_hdr + 1);
+    uint8_t *pkt_end = buf + pkt_size;
+
+    //ether_hdr
+    uint8_t *d_addr = eth_hdr->d_addr.addr_bytes;
+    uint8_t *s_addr = eth_hdr->s_addr.addr_bytes;
+    memswap(d_addr, s_addr, 6);
+
+    //ipv4
+    uint32_t tmp_ip_addr;
+    ip_hdr->total_length = htons((uint16_t)(pkt_end - (uint8_t *)ip_hdr));
+    ip_hdr->packet_id = 0;
+    ip_hdr->fragment_offset = 0;
+    ip_hdr->time_to_live = 255;
+    ip_hdr->hdr_checksum = 0;
+    tmp_ip_addr = ip_hdr->src_addr;
+    ip_hdr->src_addr = ip_hdr->dst_addr;
+    ip_hdr->dst_addr = tmp_ip_addr;
+    ip_hdr->hdr_checksum = rte_ipv4_cksum(ip_hdr);
+
+    //udp
+    uint16_t tmp_port;
+    tmp_port = udp_hdr->src_port;
+    udp_hdr->src_port = udp_hdr->dst_port;
+    udp_hdr->dst_port = tmp_port;
+    udp_hdr->dgram_len = htons((uint16_t)(pkt_end - (uint8_t *)udp_hdr));
+    udp_hdr->dgram_cksum = 0;
+
+    udp_hdr->dgram_cksum = rte_ipv4_udptcp_cksum(ip_hdr, udp_hdr);
+    // Part 4.
 }
 
 /*
@@ -152,9 +195,27 @@ lcore_main(void)
     for (;;)
     {
         // Add your code here.
-        int i = 0;
-        // Part 0.
+        int nb_rx, nb_tx;
+        nb_rx = rte_eth_rx_burst(port, 0, query_buf, BURST_SIZE);
+        if (nb_rx == 0)
+        {
+            //Add totoro code here.
+            // rte_pktmbuf_free(query_buf[i]);
+            continue;
+        }
 
+        int i = 0;
+
+        uint8_t *data_addr = rte_pktmbuf_mtod(query_buf[i], void *);
+        eth_hdr = (struct ether_hdr *)data_addr;
+        ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
+        udp_hdr = (struct udp_hdr *)(ip_hdr + 1);
+        buffer = (uint8_t *)(udp_hdr + 1);
+        reply_buf[i] = query_buf[i];
+
+        int hdr_len = (int)(buffer - data_addr);
+        int nbytes = query_buf[i]->data_len - hdr_len;
+        // Part 0.
 
         /*********preparation (begin)**********/
         free_questions(msg.questions);
@@ -200,8 +261,29 @@ lcore_main(void)
         /*********write output (end)**********/
 
         //Add your code here.
-        rte_pktmbuf_append(reply_buf[i], buflen + 42 - reply_buf[i]->data_len); // 42 is the size of header.
+
+        rte_pktmbuf_append(reply_buf[i], buflen + hdr_len - reply_buf[i]->data_len);
+        build_packet(data_addr, buflen + hdr_len);
+
+        // rte_pktmbuf_append(reply_buf[i], buflen + 42 - reply_buf[i]->data_len); // 42 is the size of header.
         // build_packet(reply_buf[i]->data, buffer, buflen);
+
+        // static uint16_t rte_eth_tx_burst 	( 	uint16_t  	port_id,
+        //                                         uint16_t  	queue_id,
+        //                                         struct rte_mbuf **  	tx_pkts,
+        //                                         uint16_t  	nb_pkts
+        //                                     )
+
+        nb_tx = rte_eth_tx_burst(port, 0, reply_buf, nb_rx);
+
+        if (unlikely(nb_tx < nb_rx))
+        {
+            uint16_t buf;
+            for (buf = nb_tx; buf < nb_rx; buf++)
+            {
+                rte_pktmbuf_free(query_buf[buf]);
+            }
+        }
         //Part 3.
     }
 }
