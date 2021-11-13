@@ -125,7 +125,6 @@ static void
 build_packet(uint8_t *buf, uint16_t pkt_size)
 {
     // Add your code here.
-
     struct ether_hdr *eth_hdr = (struct ether_hdr *)buf;
     struct ipv4_hdr *ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
     struct udp_hdr *udp_hdr = (struct udp_hdr *)(ip_hdr + 1);
@@ -149,10 +148,10 @@ build_packet(uint8_t *buf, uint16_t pkt_size)
     ip_hdr->hdr_checksum = rte_ipv4_cksum(ip_hdr);
 
     //udp
-    uint16_t tmp_port;
-    tmp_port = udp_hdr->src_port;
+    uint16_t tmp_udp_port;
+    tmp_udp_port = udp_hdr->src_port;
     udp_hdr->src_port = udp_hdr->dst_port;
-    udp_hdr->dst_port = tmp_port;
+    udp_hdr->dst_port = tmp_udp_port;
     udp_hdr->dgram_len = htons((uint16_t)(pkt_end - (uint8_t *)udp_hdr));
     udp_hdr->dgram_cksum = 0;
 
@@ -170,6 +169,12 @@ lcore_main(void)
     uint16_t port = 0; // only one port is used.
     // uint8_t query_buf_flag = 0;		// set to 1 after query packet received.
     struct rte_mbuf *query_buf[BURST_SIZE], *reply_buf[BURST_SIZE];
+
+    //Add totoro code here.
+    struct ether_hdr *eth_hdr;
+    struct ipv4_hdr *ip_hdr;
+    struct udp_hdr *udp_hdr;
+
     uint16_t nb_rx, nb_tx;
     uint8_t *buffer;
     struct Message msg;
