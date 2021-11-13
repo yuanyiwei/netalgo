@@ -200,7 +200,8 @@ lcore_main(void)
     for (;;)
     {
         // Add your code here.
-        int nb_rx, nb_tx;
+
+        // int nb_rx, nb_tx;
         nb_rx = rte_eth_rx_burst(port, 0, query_buf, BURST_SIZE);
         if (nb_rx == 0)
         {
@@ -219,7 +220,7 @@ lcore_main(void)
         reply_buf[i] = query_buf[i];
 
         int hdr_len = (int)(buffer - data_addr);
-        int nbytes = query_buf[i]->data_len - hdr_len;
+        // int nbytes = query_buf[i]->data_len - hdr_len;
         // Part 0.
 
         /*********preparation (begin)**********/
