@@ -25,7 +25,7 @@
 
 #define NUM_MBUFS 8191
 #define MBUF_CACHE_SIZE 250
-#define BURST_SIZE 1
+#define BURST_SIZE 4
 
 static const struct rte_eth_conf port_conf_default = {
     .rxmode = {
@@ -178,6 +178,9 @@ lcore_main(void)
     uint16_t nb_rx, nb_tx;
     uint8_t *buffer;
     struct Message msg;
+
+    int cnt = 0;
+
     memset(&msg, 0, sizeof(struct Message));
     // memset(query_buf, 0, BURST_SIZE);
     // memset(reply_buf, 0, BURST_SIZE);
@@ -210,76 +213,77 @@ lcore_main(void)
             continue;
         }
 
-        int i = 0;
-
-        uint8_t *data_addr = rte_pktmbuf_mtod(query_buf[i], void *);
-        eth_hdr = (struct ether_hdr *)data_addr;
-        ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
-        udp_hdr = (struct udp_hdr *)(ip_hdr + 1);
-        buffer = (uint8_t *)(udp_hdr + 1);
-        reply_buf[i] = query_buf[i];
-
-        int hdr_len = (int)(buffer - data_addr);
-        // int nbytes = query_buf[i]->data_len - hdr_len;
-        // Part 0.
-
-        /*********preparation (begin)**********/
-        free_questions(msg.questions);
-        free_resource_records(msg.answers);
-        free_resource_records(msg.authorities);
-        free_resource_records(msg.additionals);
-        memset(&msg, 0, sizeof(struct Message));
-        /*********preparation (end)**********/
-
-        // Add your code here.
-        // Part 1.
-
-        /*********read input (begin)**********/
-        // not DNS
-        if (decode_msg(&msg, buffer, query_buf[i]->data_len - 42) != 0)
+        int i;
+        for (i = 0; i < nb_rx; i++)
         {
-            //Add totoro code here.
-            // rte_pktmbuf_free(query_buf[i]);
-            continue;
+            uint8_t *data_addr = rte_pktmbuf_mtod(query_buf[i], void *);
+            eth_hdr = (struct ether_hdr *)data_addr;
+            ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
+            udp_hdr = (struct udp_hdr *)(ip_hdr + 1);
+            buffer = (uint8_t *)(udp_hdr + 1);
+            reply_buf[i] = query_buf[i];
+
+            int hdr_len = (int)(buffer - data_addr);
+            // int nbytes = query_buf[i]->data_len - hdr_len;
+            // Part 0.
+
+            /*********preparation (begin)**********/
+            free_questions(msg.questions);
+            free_resource_records(msg.answers);
+            free_resource_records(msg.authorities);
+            free_resource_records(msg.additionals);
+            memset(&msg, 0, sizeof(struct Message));
+            /*********preparation (end)**********/
+
+            // Add your code here.
+            // Part 1.
+
+            /*********read input (begin)**********/
+            // not DNS
+            if (decode_msg(&msg, buffer, query_buf[i]->data_len - 42) != 0)
+            {
+                //Add totoro code here.
+                // rte_pktmbuf_free(query_buf[i]);
+                continue;
+            }
+            /* Print query */
+            // print_query(&msg);
+
+            resolver_process(&msg);
+
+            /* Print response */
+            // print_query(&msg);
+            /*********read input (end)**********/
+
+            //Add your code here.
+            //Part 2.
+
+            /*********write output (begin)**********/
+            uint8_t *p = buffer;
+            if (encode_msg(&msg, &p) != 0)
+            {
+                //Add totoro code here.
+                // rte_pktmbuf_free(query_buf[i]);
+                continue;
+            }
+
+            uint32_t buflen = p - buffer;
+            /*********write output (end)**********/
+
+            //Add your code here.
+
+            rte_pktmbuf_append(reply_buf[i], buflen + hdr_len - reply_buf[i]->data_len);
+            build_packet(data_addr, buflen + hdr_len);
+
+            // rte_pktmbuf_append(reply_buf[i], buflen + 42 - reply_buf[i]->data_len); // 42 is the size of header.
+            // build_packet(reply_buf[i]->data, buffer, buflen);
+
+            // static uint16_t rte_eth_tx_burst 	( 	uint16_t  	port_id,
+            //                                         uint16_t  	queue_id,
+            //                                         struct rte_mbuf **  	tx_pkts,
+            //                                         uint16_t  	nb_pkts
+            //                                     )
         }
-        /* Print query */
-        print_query(&msg);
-
-        resolver_process(&msg);
-
-        /* Print response */
-        print_query(&msg);
-        /*********read input (end)**********/
-
-        //Add your code here.
-        //Part 2.
-
-        /*********write output (begin)**********/
-        uint8_t *p = buffer;
-        if (encode_msg(&msg, &p) != 0)
-        {
-            //Add totoro code here.
-            // rte_pktmbuf_free(query_buf[i]);
-            continue;
-        }
-
-        uint32_t buflen = p - buffer;
-        /*********write output (end)**********/
-
-        //Add your code here.
-
-        rte_pktmbuf_append(reply_buf[i], buflen + hdr_len - reply_buf[i]->data_len);
-        build_packet(data_addr, buflen + hdr_len);
-
-        // rte_pktmbuf_append(reply_buf[i], buflen + 42 - reply_buf[i]->data_len); // 42 is the size of header.
-        // build_packet(reply_buf[i]->data, buffer, buflen);
-
-        // static uint16_t rte_eth_tx_burst 	( 	uint16_t  	port_id,
-        //                                         uint16_t  	queue_id,
-        //                                         struct rte_mbuf **  	tx_pkts,
-        //                                         uint16_t  	nb_pkts
-        //                                     )
-
         nb_tx = rte_eth_tx_burst(port, 0, reply_buf, nb_rx);
 
         if (unlikely(nb_tx < nb_rx))
@@ -291,6 +295,8 @@ lcore_main(void)
             }
         }
         //Part 3.
+        cnt += nb_rx;
+        printf("response %dth packet", cnt);
     }
 }
 

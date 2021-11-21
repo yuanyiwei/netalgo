@@ -163,7 +163,8 @@ void put32bits(uint8_t** buffer, uint32_t value){
 // 3foo3bar3com0 => foo.bar.com (No full validation is done!)
 char *decode_domain_name(const uint8_t **buf, size_t len){
     char domain[256];
-    for (int i = 1; i < MIN(256, len); i += 1) {
+    int i;
+    for (i = 1; i < MIN(256, len); i += 1){
         uint8_t c = (*buf)[i];
         if (c == 0) {
             domain[i - 1] = 0;
