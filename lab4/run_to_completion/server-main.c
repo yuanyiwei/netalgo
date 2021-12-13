@@ -79,9 +79,10 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 		return retval;
 
 	/* Allocate and set up 1 RX queue per Ethernet port. */
-	for (q = 0; q < rx_rings; q++) {
+	for (q = 0; q < rx_rings; q++)
+	{
 		retval = rte_eth_rx_queue_setup(port, q, nb_rxd,
-				rte_eth_dev_socket_id(port), NULL, mbuf_pool);
+										rte_eth_dev_socket_id(port), NULL, mbuf_pool);
 		if (retval < 0)
 			return retval;
 	}
@@ -89,9 +90,10 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 	txconf = dev_info.default_txconf;
 	txconf.offloads = port_conf.txmode.offloads;
 	/* Allocate and set up 1 TX queue per Ethernet port. */
-	for (q = 0; q < tx_rings; q++) {
+	for (q = 0; q < tx_rings; q++)
+	{
 		retval = rte_eth_tx_queue_setup(port, q, nb_txd,
-				rte_eth_dev_socket_id(port), &txconf);
+										rte_eth_dev_socket_id(port), &txconf);
 		if (retval < 0)
 			return retval;
 	}
@@ -105,11 +107,11 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 	struct ether_addr addr;
 	rte_eth_macaddr_get(port, &addr);
 	printf("Port %u MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
-			   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
-			port,
-			addr.addr_bytes[0], addr.addr_bytes[1],
-			addr.addr_bytes[2], addr.addr_bytes[3],
-			addr.addr_bytes[4], addr.addr_bytes[5]);
+		   " %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "\n",
+		   port,
+		   addr.addr_bytes[0], addr.addr_bytes[1],
+		   addr.addr_bytes[2], addr.addr_bytes[3],
+		   addr.addr_bytes[4], addr.addr_bytes[5]);
 
 	/* Enable RX in promiscuous mode for the Ethernet device. */
 	rte_eth_promiscuous_enable(port);
@@ -122,70 +124,43 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
  * basing on information from the query packet(buf2).
  */
 static void
-build_packet(char *buf1, char * buf2, uint16_t pkt_size)
+// build_packet(char *buf1, char *buf2, uint16_t pkt_size)
+build_packet(uint8_t *buf, uint16_t pkt_size)
 {
-	struct ether_hdr *eth_hdr1, *eth_hdr2;
-	struct ipv4_hdr *ip_hdr1, *ip_hdr2;
-	struct udp_hdr *udp_hdr1, *udp_hdr2;
-
 	// Add your code here.
+	struct ether_hdr *eth_hdr = (struct ether_hdr *)buf;
+	struct ipv4_hdr *ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
+	struct udp_hdr *udp_hdr = (struct udp_hdr *)(ip_hdr + 1);
+	uint8_t *pkt_end = buf + pkt_size;
+
+	//ether_hdr
+	uint8_t *d_addr = eth_hdr->d_addr.addr_bytes;
+	uint8_t *s_addr = eth_hdr->s_addr.addr_bytes;
+	memswap(d_addr, s_addr, 6);
+
+	//ipv4
+	uint32_t tmp_ip_addr;
+	ip_hdr->total_length = htons((uint16_t)(pkt_end - (uint8_t *)ip_hdr));
+	ip_hdr->packet_id = 0;
+	ip_hdr->fragment_offset = 0;
+	ip_hdr->time_to_live = 255;
+	ip_hdr->hdr_checksum = 0;
+	tmp_ip_addr = ip_hdr->src_addr;
+	ip_hdr->src_addr = ip_hdr->dst_addr;
+	ip_hdr->dst_addr = tmp_ip_addr;
+	ip_hdr->hdr_checksum = rte_ipv4_cksum(ip_hdr);
+
+	//udp
+	uint16_t tmp_udp_port;
+	tmp_udp_port = udp_hdr->src_port;
+	udp_hdr->src_port = udp_hdr->dst_port;
+	udp_hdr->dst_port = tmp_udp_port;
+	udp_hdr->dgram_len = htons((uint16_t)(pkt_end - (uint8_t *)udp_hdr));
+	udp_hdr->dgram_cksum = 0;
+
+	udp_hdr->dgram_cksum = rte_ipv4_udptcp_cksum(ip_hdr, udp_hdr);
 	// Part 4.
-
-	// put every point to the correct position
-	eth_hdr1 = (struct ether_hdr*)buf1;
-	ip_hdr1 = (struct ipv4_hdr*)(buf1 + 14);
-	udp_hdr1 = (struct udp_hdr*)(buf1 + 14 + 20);
-	eth_hdr2 = (struct ether_hdr*)buf2;
-	ip_hdr2 = (struct ipv4_hdr*)(buf2 + 14);
-	udp_hdr2 = (struct udp_hdr*)(buf2 + 14 + 20);
-
-	// acordding to the query packet head to fill the reply packet head.
-
-	/** ether head
-     * struct ether_addr 	d_addr
-     * struct ether_addr 	s_addr
-     * uint16_t ether_type
-     **/
-	eth_hdr2->d_addr = eth_hdr1->s_addr;
-	eth_hdr2->s_addr = eth_hdr1->d_addr;
-	eth_hdr2->ether_type = eth_hdr1->ether_type;
-
-	/** ipv4 head
-        uint8_t 	version_ihl
-        uint8_t 	type_of_service
-        uint16_t 	total_length
-        uint16_t 	packet_id
-        uint16_t 	fragment_offset
-        uint8_t 	time_to_live
-        uint8_t 	next_proto_id
-        uint16_t 	hdr_checksum
-        uint32_t 	src_addr
-        uint32_t 	dst_addr
-    **/
-	ip_hdr2->version_ihl = ip_hdr1->version_ihl;
-	ip_hdr2->type_of_service = ip_hdr1->type_of_service;
-	ip_hdr2->total_length = rte_cpu_to_be_16(28 + pkt_size);
-	ip_hdr2->packet_id = ip_hdr1->packet_id ^ 0x0100;
-	ip_hdr2->fragment_offset = ip_hdr1->fragment_offset | (0x0040);
-	ip_hdr2->time_to_live = ip_hdr1->time_to_live;
-	ip_hdr2->next_proto_id = ip_hdr1->next_proto_id;
-	ip_hdr2->hdr_checksum = 0;
-	ip_hdr2->src_addr = ip_hdr1->dst_addr;
-	ip_hdr2->dst_addr = ip_hdr1->src_addr;
-	ip_hdr2->hdr_checksum = rte_ipv4_cksum(ip_hdr2);
-
-	/** udp head
-        uint16_t 	src_port
-        uint16_t 	dst_port
-        uint16_t 	dgram_len
-        uint16_t 	dgram_cksum
-    **/
-	udp_hdr2->src_port = udp_hdr1->dst_port;
-	udp_hdr2->dst_port = udp_hdr1->src_port;
-	udp_hdr2->dgram_len = rte_cpu_to_be_16(8 + pkt_size);
-	udp_hdr2->dgram_cksum = 0;
 }
-
 
 /*
  * The lcore main. This is the main thread that does the work, read
@@ -194,77 +169,104 @@ build_packet(char *buf1, char * buf2, uint16_t pkt_size)
 static void
 lcore_main_loop(void)
 {
-	uint16_t port = 0;	        // only one port is used.
+	uint16_t port = 0; // only one port is used.
 	uint16_t i = 0, j = 0;
-    unsigned lcore_id;
+	unsigned lcore_id;
 	struct rte_mbuf *query_buf[BURST_SIZE], *reply_buf[BURST_SIZE];
+
+	//Add totoro code here.
+	struct ether_hdr *eth_hdr;
+	struct ipv4_hdr *ip_hdr;
+	struct udp_hdr *udp_hdr;
+
 	uint16_t nb_rx, nb_tx;
 	uint8_t *buffer;
 	struct Message msg;
+
 	memset(&msg, 0, sizeof(struct Message));
-	
-    lcore_id = rte_lcore_id(); // get lcore id 
+
+	lcore_id = rte_lcore_id(); // get lcore id
 
 	/*
 	 * Check that the port is on the same NUMA node as the polling thread
 	 * for best performance.
 	 */
 	if (rte_eth_dev_socket_id(port) > 0 &&
-			rte_eth_dev_socket_id(port) !=
-					(int)rte_socket_id())
+		rte_eth_dev_socket_id(port) !=
+			(int)rte_socket_id())
 		printf("WARNING, port %u is on remote NUMA node to "
-				"polling thread.\n\tPerformance will "
-				"not be optimal.\n", port);
-	
+			   "polling thread.\n\tPerformance will "
+			   "not be optimal.\n",
+			   port);
+
 	printf("\nSimpleDNS (using DPDK) is running...\n");
 
-    int total_rx = 0;
-    int total_tx = 0;
+	int total_rx = 0;
+	int total_tx = 0;
 	/* Run until the application is quit or killed. */
-	while (!force_quit) {
+	while (!force_quit)
+	{
 		// Add your code here.
-		// Part 0. 
+		// Part 0.
 
 		// ask for reply packet memory
-		for(i = 0; i < BURST_SIZE; i++){
-			do{
-				reply_buf[i] = rte_pktmbuf_alloc(mbuf_pool);
-			}while(reply_buf[i] == NULL);
-		}
-		
+		// for (i = 0; i < BURST_SIZE; i++)
+		// {
+		// 	do
+		// 	{
+		// 		reply_buf[i] = rte_pktmbuf_alloc(mbuf_pool);
+		// 	} while (reply_buf[i] == NULL);
+		// }
+
 		/*********preparation (begin)**********/
 		/*********preparation (end)**********/
-		
+
 		// Add your code here.
 		// Part 1.
 		// receive to query_buf and assign value to buffer. 0号核接收0号队列，1号核接收1号队列...
 		nb_rx = rte_eth_rx_burst(port, lcore_id, query_buf, BURST_SIZE);
 
-		if (unlikely(nb_rx == 0)){
-			for(i = 0; i < BURST_SIZE; i++)
-				rte_pktmbuf_free(reply_buf[i]);
+		if (unlikely(nb_rx == 0))
+		{
+			// for (i = 0; i < BURST_SIZE; i++)
+			// 	rte_pktmbuf_free(reply_buf[i]);
 			continue;
 		}
-		
+
 		uint16_t nb_tx_prepare = 0;
-		for(i = 0; i < nb_rx; i++){
-            free_questions(msg.questions);
-            free_resource_records(msg.answers);
-            free_resource_records(msg.authorities);
-            free_resource_records(msg.additionals);
-            memset(&msg, 0, sizeof(struct Message));
+		for (i = 0; i < nb_rx; i++)
+		{
+			// Add your code here.
+			uint8_t *data_addr = rte_pktmbuf_mtod(query_buf[i], void *);
+			eth_hdr = (struct ether_hdr *)data_addr;
+			ip_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
+			udp_hdr = (struct udp_hdr *)(ip_hdr + 1);
+			buffer = (uint8_t *)(udp_hdr + 1);
+			reply_buf[i] = query_buf[i];
+
+			int hdr_len = (int)(buffer - data_addr);
+			// Add your code here.
+
+			free_questions(msg.questions);
+			free_resource_records(msg.answers);
+			free_resource_records(msg.authorities);
+			free_resource_records(msg.additionals);
+			memset(&msg, 0, sizeof(struct Message));
 
 			// filter the port 9000 not 9000
-			if(*rte_pktmbuf_mtod_offset(query_buf[i], uint16_t*, 36) != rte_cpu_to_be_16(9000)){
+			if (*rte_pktmbuf_mtod_offset(query_buf[i], uint16_t *, 36) != rte_cpu_to_be_16(9000))
+			{
 				continue;
 			}
 
 			// assign the data start address to buffer
-			buffer = rte_pktmbuf_mtod_offset(query_buf[i], uint8_t*, 42); // 14 + 20 + 8 = 42
-			
-			/*********read input (begin)**********/ 
+
+			// buffer = rte_pktmbuf_mtod_offset(query_buf[i], uint8_t *, 42); // 14 + 20 + 8 = 42
+
+			/*********read input (begin)**********/
 			// not DNS
-			if (decode_msg(&msg, buffer, query_buf[i]->data_len - 42) != 0) {
+			if (decode_msg(&msg, buffer, query_buf[i]->data_len - 42) != 0)
+			{
 				continue;
 			}
 			/* Print query */
@@ -274,53 +276,63 @@ lcore_main_loop(void)
 			/* Print response */
 			//print_query(&msg);
 			/*********read input (end)**********/
-			
+
 			//Add your code here.
 			//Part 2.
 
 			// plan the reply packet space.
 			// add ethernet header, ipv4 header, udp header
-			rte_pktmbuf_append(reply_buf[nb_tx_prepare], sizeof(struct ether_hdr));
-			rte_pktmbuf_append(reply_buf[nb_tx_prepare], sizeof(struct ipv4_hdr));
-			rte_pktmbuf_append(reply_buf[nb_tx_prepare], sizeof(struct udp_hdr));
-			
+
+			// rte_pktmbuf_append(reply_buf[nb_tx_prepare], sizeof(struct ether_hdr));
+			// rte_pktmbuf_append(reply_buf[nb_tx_prepare], sizeof(struct ipv4_hdr));
+			// rte_pktmbuf_append(reply_buf[nb_tx_prepare], sizeof(struct udp_hdr));
+
 			/*********write output (begin)**********/
 			uint8_t *p = buffer;
-			if (encode_msg(&msg, &p) != 0) {
+			if (encode_msg(&msg, &p) != 0)
+			{
 				continue;
 			}
 
 			uint32_t buflen = p - buffer;
 			/*********write output (end)**********/
-			
+
 			//Add your code here.
 			//Part 3.
 
-			// add the payload
-			char * payload = (char*)rte_pktmbuf_append(reply_buf[nb_tx_prepare], buflen);
-			rte_memcpy(payload, buffer, buflen);
-			
-			// acording to query_buf, build DPDK packet head
-			build_packet(rte_pktmbuf_mtod_offset(query_buf[i], char*, 0), rte_pktmbuf_mtod_offset(reply_buf[nb_tx_prepare], char*, 0), buflen);
+			// // add the payload
+
+			// char *payload = (char *)rte_pktmbuf_append(reply_buf[nb_tx_prepare], buflen);
+			// rte_memcpy(payload, buffer, buflen);
+
+			// // acording to query_buf, build DPDK packet head
+			// build_packet(rte_pktmbuf_mtod_offset(query_buf[i], char *, 0), rte_pktmbuf_mtod_offset(reply_buf[nb_tx_prepare], char *, 0), buflen);
+
+			rte_pktmbuf_append(reply_buf[i], buflen + hdr_len - reply_buf[i]->data_len);
+			build_packet(data_addr, buflen + hdr_len);
+
 			nb_tx_prepare++;
 		}
 
-        // send packet. 0号核发送到0号queue，1号核发送到1号queue
+		// send packet. 0号核发送到0号queue，1号核发送到1号queue
 		nb_tx = rte_eth_tx_burst(port, lcore_id, reply_buf, nb_tx_prepare);
 
-        total_rx += nb_tx_prepare;
-        total_tx += nb_tx;
-        
+		total_rx += nb_tx_prepare;
+		total_tx += nb_tx;
+
 		// free query buffer and unsend packet.
-		for(i = 0; i < nb_rx; i++)
+		for (i = 0; i < nb_rx; i++)
+		{
 			rte_pktmbuf_free(query_buf[i]);
-		for(i = nb_tx; i < nb_tx_prepare; i++){
-			rte_pktmbuf_free(reply_buf[i]);
 		}
+		// for (i = nb_tx; i < nb_tx_prepare; i++)
+		// {
+		// 	rte_pktmbuf_free(reply_buf[i]);
+		// }
 	}
-    
-    // printf result
-    printf("core id: %d nb_rx:%d, nb_tx:%d\n", lcore_id, total_rx, total_tx); 
+
+	// printf result
+	printf("core id: %d nb_rx:%d, nb_tx:%d\n", lcore_id, total_rx, total_tx);
 }
 
 static int
@@ -333,9 +345,10 @@ dns_launch_one_lcore(__attribute__((unused)) void *dummy)
 static void
 signal_handler(int signum)
 {
-	if (signum == SIGINT || signum == SIGTERM) {
+	if (signum == SIGINT || signum == SIGTERM)
+	{
 		printf("\n\nSignal %d received, preparing to exit...\n",
-				signum);
+			   signum);
 		force_quit = true;
 	}
 }
@@ -344,8 +357,7 @@ signal_handler(int signum)
  * The main function, which does initialization and calls the per-lcore
  * functions.
  */
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
 	unsigned lcore_id;
 	uint16_t portid = 0, nb_ports = 1;
@@ -358,30 +370,30 @@ main(int argc, char *argv[])
 	argc -= ret;
 	argv += ret;
 
-    force_quit = false;
-    signal(SIGINT, signal_handler);
+	force_quit = false;
+	signal(SIGINT, signal_handler);
 	signal(SIGTERM, signal_handler);
 
 	/* Creates a new mempool in memory to hold the mbufs. */
 	mbuf_pool = rte_pktmbuf_pool_create("MBUF_POOL", NUM_MBUFS * nb_ports,
-		MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+										MBUF_CACHE_SIZE, 0, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
 
 	if (mbuf_pool == NULL)
 		rte_exit(EXIT_FAILURE, "Cannot create mbuf pool\n");
 
 	/* Initialize port 0. */
 	if (port_init(portid, mbuf_pool) != 0)
-		rte_exit(EXIT_FAILURE, "Cannot init port %"PRIu16 "\n", portid);
+		rte_exit(EXIT_FAILURE, "Cannot init port %" PRIu16 "\n", portid);
 
 	if (rte_lcore_count() > 1)
 		printf("\nWARNING: Too many lcores enabled. Only 1 used.\n");
 
-    ret = 0;
+	ret = 0;
 	/* launch per-lcore init on every lcore */
 	rte_eal_mp_remote_launch(dns_launch_one_lcore, NULL, CALL_MASTER);
-	
+
 	// wait
 	rte_eal_mp_wait_lcore();
-	
+
 	return 0;
 }
