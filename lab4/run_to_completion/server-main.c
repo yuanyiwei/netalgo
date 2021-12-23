@@ -24,13 +24,17 @@
 static volatile bool force_quit;
 
 #define RX_RING_SIZE 4096
+// #define RX_RING_SIZE 8192
 #define TX_RING_SIZE 4096
+// #define TX_RING_SIZE 8192
 
-#define NUM_MBUFS 32767
+// #define NUM_MBUFS 32767
+#define NUM_MBUFS 65535
 #define MBUF_CACHE_SIZE 250
-#define BURST_SIZE 32
+#define BURST_SIZE 2
+// #define BURST_SIZE 32
 
-#define NUM_QUEUES 4
+#define NUM_QUEUES 8
 
 static const struct rte_eth_conf port_conf_default = {
 	.rxmode = {
@@ -81,6 +85,7 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 	/* Allocate and set up 1 RX queue per Ethernet port. */
 	for (q = 0; q < rx_rings; q++)
 	{
+        printf("starting setup\n");
 		retval = rte_eth_rx_queue_setup(port, q, nb_rxd,
 										rte_eth_dev_socket_id(port), NULL, mbuf_pool);
 		if (retval < 0)
@@ -117,6 +122,15 @@ port_init(uint16_t port, struct rte_mempool *mbuf_pool)
 	rte_eth_promiscuous_enable(port);
 
 	return 0;
+}
+
+
+inline void memswap(void *addr1, void *addr2, size_t len)
+{
+    uint8_t tmp_buf[8];
+    memcpy(tmp_buf, addr1, len);
+    memcpy(addr1, addr2, len);
+    memcpy(addr2, tmp_buf, len);
 }
 
 /*
